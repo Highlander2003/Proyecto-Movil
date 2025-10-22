@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "SmartSteps",
+    "slug": "smartsteps",
+    "scheme": "smartsteps",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.smartsteps.app"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      ["expo-notifications"]
+    ],
+    "extra": {}
+  }
+}
