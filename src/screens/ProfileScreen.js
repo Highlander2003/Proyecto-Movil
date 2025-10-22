@@ -12,6 +12,12 @@ import { useSettingsStore } from '../store/settings';
 import { Ionicons } from '@expo/vector-icons';
 import { Switch as RNSwitch } from 'react-native';
 
+// Pantalla de Perfil
+// - Muestra avatar/nombre del usuario, fecha "Miembro desde"
+// - Configuraciones: Modo oscuro y Notificaciones (switches funcionales)
+// - Sección general con items informativos (privacidad, acerca de)
+// - Barra de estadísticas (StatsBar) con métricas destacadas
+// - Acción para Cerrar sesión
 const Screen = styled.ScrollView`
   flex: 1;
   background-color: ${({ theme }) => theme.colors.background};
@@ -64,12 +70,16 @@ function formatMemberSince(user) {
 }
 
 export default function ProfileScreen() {
+  // Toggle de tema (ThemeProvider) y nombre del tema actual
   const { toggleTheme, themeName } = useAppTheme();
+  // Acciones/estado de autenticación
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
+  // Preferencias de notificaciones desde el store de settings
   const notificationsEnabled = useSettingsStore((s) => s.notificationsEnabled);
   const setNotifications = useSettingsStore((s) => s.setNotifications);
 
+  // Derivar nombre mostrable y fecha de alta
   const name = user?.displayName || user?.email?.split('@')[0] || 'Usuario';
   const memberSince = useMemo(() => formatMemberSince(user), [user]);
 
@@ -79,6 +89,7 @@ export default function ProfileScreen() {
         <Title>Perfil</Title>
         <Subtitle>Personaliza tu experiencia</Subtitle>
 
+        {/* Cabecera de perfil con avatar y nombre */}
         <Card>
           <Row>
             <Avatar name={name} />
@@ -93,6 +104,7 @@ export default function ProfileScreen() {
 
         <SectionHeader>Configuración</SectionHeader>
         <Card>
+          {/* Modo oscuro: alterna themeName con toggleTheme */}
           <ListItem
             icon={<Ionicons name="moon" color="#7dd3fc" size={18} />}
             title="Modo oscuro"
@@ -105,6 +117,7 @@ export default function ProfileScreen() {
             }
           />
           <Divider />
+          {/* Notificaciones push: preferencia global del usuario */}
           <ListItem
             icon={<Ionicons name="notifications" color="#86efac" size={18} />}
             title="Notificaciones"
@@ -120,6 +133,7 @@ export default function ProfileScreen() {
 
         <SectionHeader>General</SectionHeader>
         <Card>
+          {/* Ítems informativos: navegación futura a pantallas de detalle */}
           <ListItem
             icon={<Ionicons name="shield-checkmark" color="#a5b4fc" size={18} />}
             title="Privacidad"
@@ -135,8 +149,10 @@ export default function ProfileScreen() {
           />
         </Card>
 
+        {/* Resumen de estadísticas clave del perfil */}
         <StatsBar completed={24} streak={5} success={86} />
 
+        {/* Cierre de sesión */}
         <Button
           variant="danger"
           title="Cerrar sesión"
@@ -151,6 +167,7 @@ export default function ProfileScreen() {
 
 // Switch con colores temáticos
 function ThemeSwitch({ value, onValueChange }) {
+  // Nota: trackColor y thumbColor se alinean con la paleta del tema oscuro
   return (
     <RNSwitch
       value={value}

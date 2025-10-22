@@ -1,6 +1,8 @@
 import React from 'react';
 import styled from 'styled-components/native';
 
+// Encabezado de sección simple
+// - Útil para separar bloques de contenido dentro de una pantalla
 const Title = styled.Text`
   color: ${({ theme }) => theme.colors.text};
   font-weight: 700;

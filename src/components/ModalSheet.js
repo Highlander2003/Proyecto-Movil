@@ -2,6 +2,14 @@ import React from 'react';
 import { Modal } from 'react-native';
 import styled from 'styled-components/native';
 
+// Modal tipo "bottom sheet" simple
+// Props:
+// - visible: controla la visibilidad
+// - onClose: callback al cerrar
+// - children: contenido del sheet
+// Notas:
+// - Usa Modal nativo (iOS/Android)
+// - El backdrop cierra el modal al presionarlo
 const Backdrop = styled.TouchableOpacity`
   flex: 1;
   background-color: rgba(0,0,0,0.5);

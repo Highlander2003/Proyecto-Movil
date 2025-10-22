@@ -1,15 +1,29 @@
+// Servicio de Firebase (Auth + Firestore) con modo local de fallback
+// Objetivo:
+// - Si existen credenciales válidas en firebase.config.js => usa Firebase real
+// - Si NO existen (placeholders) => funciona en "modo local" para que la app sea usable sin backend
+//
+// Modo local:
+// - Simula login/registro guardando un objeto `user` en AsyncStorage ('smartsteps-local-user')
+// - initAuthListener lee ese valor y emite el usuario para mantener la sesión
+// - Firestore no está disponible en local (db=null)
 import firebaseConfig from './firebase.config';
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore } from 'firebase/firestore';
 
+// Determina si se debe usar el modo local (sin backend) en base a la config
 const LOCAL_MODE = !firebaseConfig?.apiKey || String(firebaseConfig.apiKey).startsWith('YOUR_');
 
 let app = null;
 let auth = null;
 let db = null;
 
+/**
+ * Inicializa (una sola vez) Firebase App/Auth/Firestore y devuelve referencias.
+ * Si está en modo local, devuelve indicadores nulos y local=true.
+ */
 export function getFirebase() {
   if (LOCAL_MODE) return { app: null, auth: null, db: null, local: true };
   if (!app) {
@@ -20,6 +34,11 @@ export function getFirebase() {
   return { app, auth, db, local: false };
 }
 
+/**
+ * Suscribe a los cambios de autenticación.
+ * - Firebase real: usa onAuthStateChanged y retorna una función para desuscribirse
+ * - Modo local: lee desde AsyncStorage el usuario simulado y llama al callback, retorna no-op
+ */
 export function initAuthListener(callback) {
   const { auth, local } = getFirebase();
   if (local) {
@@ -34,6 +53,11 @@ export function initAuthListener(callback) {
   return onAuthStateChanged(auth, (user) => callback(user));
 }
 
+/**
+ * Inicia sesión con email y contraseña.
+ * - Modo local: guarda un usuario mínimo en AsyncStorage y lo retorna
+ * - Firebase: usa signInWithEmailAndPassword y retorna el user
+ */
 export async function authSignIn(email, password) {
   const fb = getFirebase();
   if (fb.local) {
@@ -45,6 +69,11 @@ export async function authSignIn(email, password) {
   return cred.user;
 }
 
+/**
+ * Registra una cuenta con email/contraseña y opcionalmente displayName.
+ * - Modo local: crea el usuario simulado y lo persiste
+ * - Firebase: crea el usuario y actualiza perfil con displayName si se indica
+ */
 export async function authRegister(email, password, displayName) {
   const fb = getFirebase();
   if (fb.local) {
@@ -59,6 +88,11 @@ export async function authRegister(email, password, displayName) {
   return cred.user;
 }
 
+/**
+ * Cierra la sesión actual.
+ * - Modo local: borra el usuario simulado del almacenamiento
+ * - Firebase: invoca signOut(auth)
+ */
 export async function authSignOut() {
   const fb = getFirebase();
   if (fb.local) {

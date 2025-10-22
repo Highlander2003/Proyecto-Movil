@@ -1,6 +1,12 @@
 import React from 'react';
 import styled from 'styled-components/native';
 
+// Ítem de lista con icono, título, subtítulo y acción a la derecha
+// Props:
+// - icon: nodo a mostrar dentro del círculo a la izquierda
+// - title: texto principal
+// - subtitle: texto secundario opcional
+// - right: nodo a la derecha (chevron, switch, botón)
 const Row = styled.View`
   flex-direction: row;
   align-items: center;

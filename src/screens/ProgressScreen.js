@@ -7,6 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { VictoryChart, VictoryAxis, VictoryLine, VictoryTheme } from 'victory-native';
 import { Dimensions } from 'react-native';
 
+// Pantalla de Progreso
+// - Muestra racha actual con un bloque con gradiente y un icono
+// - Gráfico semanal (Victory) con ejes y línea de datos
+// - Métricas clave (total completados, tasa de éxito)
+// - Cuadrícula de logros con tarjetas
+// - Tip motivacional al final
 const Screen = styled.ScrollView`
   flex: 1;
   background-color: ${({ theme }) => theme.colors.background};
@@ -65,7 +71,7 @@ const days = ['L','M','X','J','V','S','D'];
 const width = Math.min(Dimensions.get('window').width - 48, 480);
 
 export default function ProgressScreen() {
-  // Datos de ejemplo
+  // Datos de ejemplo (reemplazar con datos reales del store o backend)
   const streak = 5;
   const completed = 24;
   const success = 86;
@@ -96,6 +102,7 @@ export default function ProgressScreen() {
           <Row style={{ alignItems: 'center' }}>
             <Subtitle>Esta semana</Subtitle>
           </Row>
+          {/* VictoryChart: gráfico responsivo con ejes personalizados */}
           <VictoryChart
             theme={VictoryTheme.material}
             width={width}

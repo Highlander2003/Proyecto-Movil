@@ -6,6 +6,12 @@ import Button from '../components/Button';
 import ModalSheet from '../components/ModalSheet';
 import { useHabitsStore } from '../store/habits';
 
+// Pantalla de Hábitos sugeridos
+// - Permite buscar en la lista de hábitos sugeridos (store)
+// - Botón "Nuevo" abre un modal para crear un microhábito personalizado
+// - Al añadir, muestra un pequeño toast de confirmación
+// - Usa Zustand: addSuggested, addHabit, searchSuggested
+// - Estilos y colores provienen del tema (theme.colors.*)
 const Screen = styled.ScrollView`
   flex: 1;
   background-color: ${({ theme }) => theme.colors.background};
@@ -74,10 +80,12 @@ const ToastText = styled.Text`
 
 export default function HabitsScreen() {
   const theme = useTheme();
+  // Acciones del store de hábitos
   const addSuggested = useHabitsStore((s) => s.addSuggested);
   const addHabit = useHabitsStore((s) => s.addHabit);
   const searchSuggested = useHabitsStore((s) => s.searchSuggested);
 
+  // Estado de UI: query de búsqueda, modal y nuevo hábito
   const [q, setQ] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState('');
@@ -86,18 +94,22 @@ export default function HabitsScreen() {
   const [newTime, setNewTime] = useState('08:00');
   const [toast, setToast] = useState('');
 
+  // Lista filtrada según la búsqueda
   const list = useMemo(() => searchSuggested(q), [q, searchSuggested]);
 
+  // Añade hábito sugerido por id y muestra confirmación
   const handleAddSuggested = (id, title) => {
     addSuggested(id);
     showToast(`Añadido: ${title}`);
   };
 
+  // Utilidad para mostrar un toast temporal
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(''), 1800);
   };
 
+  // Crea un nuevo hábito personalizado a partir del modal
   const saveNewHabit = () => {
     if (!newName.trim()) return;
     addHabit({ title: newName.trim(), icon: newIcon || '✅', frequency: newFrequency, time: newTime });
@@ -131,6 +143,7 @@ export default function HabitsScreen() {
             />
           </Row>
 
+          {/* Lista de sugeridos con botón para añadir al plan */}
           {list.map((h) => (
             <Card key={h.id} style={{ marginTop: 6 }}>
               <HabitRow>
@@ -152,6 +165,7 @@ export default function HabitsScreen() {
         </Content>
       </Screen>
 
+      {/* Modal para crear un nuevo microhábito */}
       <ModalSheet visible={showNew} onClose={() => setShowNew(false)}>
         <Title style={{ marginBottom: 8 }}>Nuevo hábito</Title>
         <Subtitle>Define los detalles de tu microhábito</Subtitle>
@@ -169,6 +183,7 @@ export default function HabitsScreen() {
         </Row>
       </ModalSheet>
 
+      {/* Toast temporal de confirmación */}
       {toast ? (
         <ToastWrap pointerEvents="none">
           <ToastBadge>
