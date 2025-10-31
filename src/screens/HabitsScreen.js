@@ -78,6 +78,37 @@ const ToastText = styled.Text`
   color: ${({ theme }) => theme.colors.text};
 `;
 
+// Nuevos estilos para chips, etiquetas y grilla de iconos
+const FieldLabel = styled.Text`
+  color: ${({ theme }) => theme.colors.textMuted};
+  margin-top: 8px;
+  margin-bottom: 6px;
+`;
+const Chips = styled.View`
+  flex-direction: row; flex-wrap: wrap; gap: 8px;
+`;
+const Chip = styled.TouchableOpacity`
+  padding: 8px 12px; border-radius: 999px; border: 1px solid ${({ theme }) => theme.colors.border};
+  background-color: ${({ active, theme }) => active ? theme.colors.accent : theme.colors.surfaceAlt};
+`;
+const ChipText = styled.Text`
+  color: ${({ active }) => active ? '#00110d' : '#cbd5e1'}; font-weight: 700;
+`;
+const IconGrid = styled.View`
+  flex-direction: row; flex-wrap: wrap; gap: 8px;
+`;
+const IconBtn = styled.TouchableOpacity`
+  width: 40px; height: 40px; border-radius: 20px; align-items: center; justify-content: center;
+  background-color: ${({ theme, active }) => active ? theme.colors.accent : theme.colors.surfaceAlt};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+`;
+const IconTxt = styled.Text`
+  color: ${({ active }) => active ? '#00110d' : '#e6e8eb'}; font-size: 18px;
+`;
+const ErrorTxt = styled.Text`
+  color: ${({ theme }) => theme.colors.danger}; font-size: 12px; margin-top: 4px;
+`;
+
 export default function HabitsScreen() {
   const theme = useTheme();
   // Acciones del store de hábitos
@@ -91,8 +122,14 @@ export default function HabitsScreen() {
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState('✅');
   const [newFrequency, setNewFrequency] = useState('Diario');
-  const [newTime, setNewTime] = useState('08:00');
+  const [newTime, setNewTime] = useState('08:00 AM');
   const [toast, setToast] = useState('');
+
+  const freqOptions = ['Diario', 'Semanal', 'Días alternos'];
+  const quickIcons = ['✅','💧','📘','🧘','🚶','🥗','😴','📝','🎨','🏃','🧠','🎯','🧹','🧴','🦷','📖','☀️','🌙'];
+
+  const isTimeValid = useMemo(() => validateTime12h(newTime), [newTime]);
+  const isNameValid = newName.trim().length > 0;
 
   // Lista filtrada según la búsqueda
   const list = useMemo(() => searchSuggested(q), [q, searchSuggested]);
@@ -111,14 +148,15 @@ export default function HabitsScreen() {
 
   // Crea un nuevo hábito personalizado a partir del modal
   const saveNewHabit = () => {
-    if (!newName.trim()) return;
-    addHabit({ title: newName.trim(), icon: newIcon || '✅', frequency: newFrequency, time: newTime });
+    if (!isNameValid || !isTimeValid) return;
+    const timeNormalized = normalizeTime12h(newTime);
+    addHabit({ title: newName.trim(), icon: newIcon || '✅', frequency: newFrequency, time: timeNormalized });
     setShowNew(false);
     setNewName('');
     setNewIcon('✅');
     setNewFrequency('Diario');
-    setNewTime('08:00');
-    showToast('Hábito creado');
+    setNewTime('08:00 AM');
+    showToast(`Hábito creado: ${newName.trim()}`);
   };
 
   return (
@@ -169,17 +207,38 @@ export default function HabitsScreen() {
       <ModalSheet visible={showNew} onClose={() => setShowNew(false)}>
         <Title style={{ marginBottom: 8 }}>Nuevo hábito</Title>
         <Subtitle>Define los detalles de tu microhábito</Subtitle>
-        <Row style={{ marginTop: 12 }}>
+
+        <FieldLabel>Nombre e icono</FieldLabel>
+        <Row>
           <Search style={{ flex: 0.4 }} value={newIcon} onChangeText={setNewIcon} maxLength={2} />
           <Search style={{ flex: 1 }} placeholder="Nombre" placeholderTextColor={theme.colors.textMuted} value={newName} onChangeText={setNewName} />
         </Row>
-        <Row style={{ marginTop: 10 }}>
-          <Search style={{ flex: 1 }} placeholder="Frecuencia (Diario/Semanal)" placeholderTextColor={theme.colors.textMuted} value={newFrequency} onChangeText={setNewFrequency} />
-          <Search style={{ flex: 0.6 }} placeholder="Horario (HH:MM)" placeholderTextColor={theme.colors.textMuted} value={newTime} onChangeText={setNewTime} />
-        </Row>
+
+        <FieldLabel>Iconos rápidos</FieldLabel>
+        <IconGrid>
+          {quickIcons.map(ic => (
+            <IconBtn key={ic} active={newIcon === ic} onPress={() => setNewIcon(ic)}>
+              <IconTxt active={newIcon === ic}>{ic}</IconTxt>
+            </IconBtn>
+          ))}
+        </IconGrid>
+
+        <FieldLabel style={{ marginTop: 10 }}>Frecuencia</FieldLabel>
+        <Chips>
+          {freqOptions.map(opt => (
+            <Chip key={opt} active={newFrequency === opt} onPress={() => setNewFrequency(opt)}>
+              <ChipText active={newFrequency === opt}>{opt}</ChipText>
+            </Chip>
+          ))}
+        </Chips>
+
+  <FieldLabel style={{ marginTop: 10 }}>Horario (12h)</FieldLabel>
+  <Search style={{ flex: 1 }} placeholder="hh:mm AM/PM" placeholderTextColor={theme.colors.textMuted} value={newTime} onChangeText={setNewTime} />
+  {!isTimeValid ? <ErrorTxt>Formato inválido. Usa hh:mm AM/PM (ej. 8:30 PM).</ErrorTxt> : null}
+
         <Row style={{ marginTop: 12, justifyContent: 'flex-end' }}>
           <Button title="Cancelar" variant="ghost" onPress={() => setShowNew(false)} />
-          <Button title="Guardar" onPress={saveNewHabit} />
+          <Button title="Guardar" onPress={saveNewHabit} style={{ opacity: isNameValid && isTimeValid ? 1 : 0.6 }} />
         </Row>
       </ModalSheet>
 
@@ -198,3 +257,19 @@ export default function HabitsScreen() {
 const Text = styled.Text`
   color: ${({ theme }) => theme.colors.text};
 `;
+
+// Validación simple de hora en formato HH:MM 24h
+function validateTime12h(str) {
+  if (typeof str !== 'string') return false;
+  const m = str.trim().match(/^(0?[1-9]|1[0-2]):([0-5]\d)\s*([AaPp][Mm])$/);
+  return !!m;
+}
+
+function normalizeTime12h(str) {
+  if (!validateTime12h(str)) return '08:00 AM';
+  const m = str.trim().match(/^(0?[1-9]|1[0-2]):([0-5]\d)\s*([AaPp][Mm])$/);
+  const hour = m[1].padStart(2, '0');
+  const minute = m[2];
+  const meridian = m[3].toUpperCase();
+  return `${hour}:${minute} ${meridian}`;
+}
