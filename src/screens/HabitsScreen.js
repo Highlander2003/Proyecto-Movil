@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Alert } from 'react-native';
 import styled, { useTheme } from 'styled-components/native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../components/Card';
@@ -114,7 +115,10 @@ export default function HabitsScreen() {
   // Acciones del store de hábitos
   const addSuggested = useHabitsStore((s) => s.addSuggested);
   const addHabit = useHabitsStore((s) => s.addHabit);
+  const updateHabit = useHabitsStore((s) => s.updateHabit);
+  const removeHabit = useHabitsStore((s) => s.removeHabit);
   const searchSuggested = useHabitsStore((s) => s.searchSuggested);
+  const active = useHabitsStore((s) => s.active);
 
   // Estado de UI: query de búsqueda, modal y nuevo hábito
   const [q, setQ] = useState('');
@@ -123,13 +127,27 @@ export default function HabitsScreen() {
   const [newIcon, setNewIcon] = useState('✅');
   const [newFrequency, setNewFrequency] = useState('Diario');
   const [newTime, setNewTime] = useState('08:00 AM');
+  const [newRepeats, setNewRepeats] = useState('1');
+  const [startDate, setStartDate] = useState(dateToKey(new Date()));
+  const [noEndDate, setNoEndDate] = useState(true);
+  const [endDate, setEndDate] = useState('');
+  const [scheduleType, setScheduleType] = useState('exact'); // 'exact' | 'offset'
+  const [offsetMinutes, setOffsetMinutes] = useState('60');
   const [toast, setToast] = useState('');
+  const [editingId, setEditingId] = useState(null);
 
   const freqOptions = ['Diario', 'Semanal', 'Días alternos'];
   const quickIcons = ['✅','💧','📘','🧘','🚶','🥗','😴','📝','🎨','🏃','🧠','🎯','🧹','🧴','🦷','📖','☀️','🌙'];
 
-  const isTimeValid = useMemo(() => validateTime12h(newTime), [newTime]);
+  const isTimeValid = useMemo(() => scheduleType === 'exact' ? validateTime12h(newTime) : true, [newTime, scheduleType]);
   const isNameValid = newName.trim().length > 0;
+  const repeatsNum = Math.max(1, Math.min(20, parseInt(newRepeats || '1', 10) || 1));
+  const isStartValid = useMemo(() => validateDate(startDate), [startDate]);
+  const isEndValid = useMemo(() => noEndDate || !endDate ? true : validateDate(endDate), [noEndDate, endDate]);
+  const isEndAfterStart = useMemo(() => {
+    if (noEndDate || !endDate) return true;
+    return compareDates(endDate, startDate) >= 0;
+  }, [noEndDate, endDate, startDate]);
 
   // Lista filtrada según la búsqueda
   const list = useMemo(() => searchSuggested(q), [q, searchSuggested]);
@@ -148,15 +166,72 @@ export default function HabitsScreen() {
 
   // Crea un nuevo hábito personalizado a partir del modal
   const saveNewHabit = () => {
-    if (!isNameValid || !isTimeValid) return;
-    const timeNormalized = normalizeTime12h(newTime);
-    addHabit({ title: newName.trim(), icon: newIcon || '✅', frequency: newFrequency, time: timeNormalized });
+    if (!isNameValid || !isTimeValid || !isStartValid || !isEndValid || !isEndAfterStart) return;
+    const timeNormalized = scheduleType === 'exact' ? normalizeTime12h(newTime) : undefined;
+    const payload = {
+      title: newName.trim(),
+      icon: newIcon || '✅',
+      frequency: newFrequency,
+      dailyRepeats: repeatsNum,
+      startDate,
+      endDate: noEndDate ? null : endDate,
+      scheduleType,
+      exactTime: timeNormalized,
+      offsetMinutes: scheduleType === 'offset' ? Math.max(1, Math.min(24*60, parseInt(offsetMinutes || '60', 10) || 60)) : undefined,
+    };
+    if (editingId) {
+      updateHabit(editingId, payload);
+      showToast(`Hábito actualizado: ${newName.trim()}`);
+    } else {
+      addHabit(payload);
+      showToast(`Hábito creado: ${newName.trim()}`);
+    }
     setShowNew(false);
+    setEditingId(null);
     setNewName('');
     setNewIcon('✅');
     setNewFrequency('Diario');
     setNewTime('08:00 AM');
-    showToast(`Hábito creado: ${newName.trim()}`);
+    setNewRepeats('1');
+    setStartDate(dateToKey(new Date()));
+    setNoEndDate(true);
+    setEndDate('');
+    setScheduleType('exact');
+    setOffsetMinutes('60');
+  };
+
+  const openEdit = (h) => {
+    setEditingId(h.id);
+    setNewName(h.title || '');
+    setNewIcon(h.icon || '✅');
+    setNewFrequency(h.frequency || 'Diario');
+    setScheduleType(h.scheduleType || 'exact');
+    if ((h.scheduleType || 'exact') === 'exact') {
+      setNewTime(h.exactTime || '08:00 AM');
+    } else {
+      setOffsetMinutes(String(h.offsetMinutes || 60));
+    }
+    setNewRepeats(String(h.dailyRepeats || 1));
+    setStartDate(h.startDate || dateToKey(new Date()));
+    if (typeof h.endDate === 'string' && h.endDate) {
+      setNoEndDate(false);
+      setEndDate(h.endDate);
+    } else {
+      setNoEndDate(true);
+      setEndDate('');
+    }
+    setShowNew(true);
+  };
+
+  const confirmDelete = (h) => {
+    Alert.alert(
+      'Eliminar hábito',
+      `¿Seguro que quieres eliminar "${h.title}"? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Eliminar', style: 'destructive', onPress: () => { removeHabit(h.id); showToast('Hábito eliminado'); } },
+      ]
+    );
   };
 
   return (
@@ -200,12 +275,37 @@ export default function HabitsScreen() {
               </HabitRow>
             </Card>
           ))}
+
+          {/* Mis hábitos activos (CRUD: editar/eliminar) */}
+          {active && active.length > 0 ? (
+            <>
+              <Title style={{ marginTop: 16 }}>Mis hábitos</Title>
+              <Subtitle>Administra tus hábitos activos</Subtitle>
+              {active.map((h) => (
+                <Card key={h.id} style={{ marginTop: 6 }}>
+                  <HabitRow>
+                    <Left>
+                      <IconWrap><Text style={{ fontSize: 18 }}>{h.icon}</Text></IconWrap>
+                      <Texts>
+                        <HTitle>{h.title}</HTitle>
+                        <HDesc>{renderHabitSubtitle(h)}</HDesc>
+                      </Texts>
+                    </Left>
+                    <Row>
+                      <Button title="Editar" variant="ghost" onPress={() => openEdit(h)} />
+                      <Button title="Eliminar" variant="danger" onPress={() => confirmDelete(h)} style={{ marginLeft: 8 }} />
+                    </Row>
+                  </HabitRow>
+                </Card>
+              ))}
+            </>
+          ) : null}
         </Content>
       </Screen>
 
       {/* Modal para crear un nuevo microhábito */}
-      <ModalSheet visible={showNew} onClose={() => setShowNew(false)}>
-        <Title style={{ marginBottom: 8 }}>Nuevo hábito</Title>
+      <ModalSheet visible={showNew} onClose={() => { setShowNew(false); setEditingId(null); }}>
+        <Title style={{ marginBottom: 8 }}>{editingId ? 'Editar hábito' : 'Nuevo hábito'}</Title>
         <Subtitle>Define los detalles de tu microhábito</Subtitle>
 
         <FieldLabel>Nombre e icono</FieldLabel>
@@ -232,13 +332,73 @@ export default function HabitsScreen() {
           ))}
         </Chips>
 
-  <FieldLabel style={{ marginTop: 10 }}>Horario (12h)</FieldLabel>
-  <Search style={{ flex: 1 }} placeholder="hh:mm AM/PM" placeholderTextColor={theme.colors.textMuted} value={newTime} onChangeText={setNewTime} />
-  {!isTimeValid ? <ErrorTxt>Formato inválido. Usa hh:mm AM/PM (ej. 8:30 PM).</ErrorTxt> : null}
+        <FieldLabel style={{ marginTop: 10 }}>Programación</FieldLabel>
+        <Chips>
+          {['Hora exacta','Min después 1ª vez'].map(opt => (
+            <Chip key={opt} active={(scheduleType === 'exact' && opt==='Hora exacta') || (scheduleType === 'offset' && opt!=='Hora exacta')} onPress={() => setScheduleType(opt==='Hora exacta' ? 'exact' : 'offset')}>
+              <ChipText active={(scheduleType === 'exact' && opt==='Hora exacta') || (scheduleType === 'offset' && opt!=='Hora exacta')}>{opt}</ChipText>
+            </Chip>
+          ))}
+        </Chips>
+        {scheduleType === 'exact' ? (
+          <>
+            <FieldLabel style={{ marginTop: 8 }}>Horario (12h)</FieldLabel>
+            <Search style={{ flex: 1 }} placeholder="hh:mm AM/PM" placeholderTextColor={theme.colors.textMuted} value={newTime} onChangeText={setNewTime} />
+            {!isTimeValid ? <ErrorTxt>Formato inválido. Usa hh:mm AM/PM (ej. 8:30 PM).</ErrorTxt> : null}
+          </>
+        ) : (
+          <>
+            <FieldLabel style={{ marginTop: 8 }}>Minutos después de la 1ª repetición</FieldLabel>
+            <Row>
+              <Search
+                style={{ flex: 0.5 }}
+                placeholder="60"
+                placeholderTextColor={theme.colors.textMuted}
+                value={offsetMinutes}
+                onChangeText={setOffsetMinutes}
+                keyboardType="number-pad"
+                maxLength={4}
+              />
+              <Subtitle style={{ marginLeft: 8 }}>Ej: 90 = 1h 30m después de completar la 1ª repetición.</Subtitle>
+            </Row>
+          </>
+        )}
+
+        <FieldLabel style={{ marginTop: 10 }}>Veces por día</FieldLabel>
+        <Row>
+          <Search
+            style={{ flex: 0.5 }}
+            placeholder="1"
+            placeholderTextColor={theme.colors.textMuted}
+            value={newRepeats}
+            onChangeText={setNewRepeats}
+            keyboardType="number-pad"
+            maxLength={2}
+          />
+          <Subtitle style={{ marginLeft: 8 }}>
+            La barra se divide en {repeatsNum} parte{repeatsNum > 1 ? 's' : ''} diarias.
+          </Subtitle>
+        </Row>
+
+        <FieldLabel style={{ marginTop: 10 }}>Inicio y fin</FieldLabel>
+        <Row>
+          <Search style={{ flex: 1 }} placeholder="YYYY-MM-DD" placeholderTextColor={theme.colors.textMuted} value={startDate} onChangeText={setStartDate} />
+        </Row>
+        {!isStartValid ? <ErrorTxt>Fecha de inicio inválida (usa YYYY-MM-DD).</ErrorTxt> : null}
+        <Row style={{ marginTop: 8, alignItems: 'center' }}>
+          <Chip active={noEndDate} onPress={() => setNoEndDate(!noEndDate)}>
+            <ChipText active={noEndDate}>{noEndDate ? 'Sin fecha de fin' : 'Con fecha de fin'}</ChipText>
+          </Chip>
+          {!noEndDate && (
+            <Search style={{ flex: 1 }} placeholder="YYYY-MM-DD" placeholderTextColor={theme.colors.textMuted} value={endDate} onChangeText={setEndDate} />
+          )}
+        </Row>
+        {!isEndValid ? <ErrorTxt>Fecha de fin inválida (usa YYYY-MM-DD).</ErrorTxt> : null}
+        {!isEndAfterStart ? <ErrorTxt>La fecha de fin debe ser igual o posterior al inicio.</ErrorTxt> : null}
 
         <Row style={{ marginTop: 12, justifyContent: 'flex-end' }}>
-          <Button title="Cancelar" variant="ghost" onPress={() => setShowNew(false)} />
-          <Button title="Guardar" onPress={saveNewHabit} style={{ opacity: isNameValid && isTimeValid ? 1 : 0.6 }} />
+          <Button title="Cancelar" variant="ghost" onPress={() => { setShowNew(false); setEditingId(null); }} />
+          <Button title="Guardar" onPress={saveNewHabit} style={{ opacity: (isNameValid && isTimeValid && isStartValid && isEndValid && isEndAfterStart) ? 1 : 0.6 }} />
         </Row>
       </ModalSheet>
 
@@ -272,4 +432,39 @@ function normalizeTime12h(str) {
   const minute = m[2];
   const meridian = m[3].toUpperCase();
   return `${hour}:${minute} ${meridian}`;
+}
+
+function renderHabitSubtitle(h) {
+  const freq = h.frequency || 'Diario';
+  const rep = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+  const sched = h.scheduleType === 'offset'
+    ? `+${h.offsetMinutes || 60} min tras 1ª`
+    : `A las ${h.exactTime || '08:00 AM'}`;
+  return `${freq} • ${rep}x/día • ${sched}`;
+}
+
+// Helpers de fecha
+function dateToKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function validateDate(str) {
+  if (typeof str !== 'string') return false;
+  const m = str.match(/^\d{4}-\d{2}-\d{2}$/);
+  if (!m) return false;
+  const [y, mo, d] = str.split('-').map((v) => parseInt(v, 10));
+  if (mo < 1 || mo > 12) return false;
+  if (d < 1 || d > 31) return false;
+  const dt = new Date(y, mo - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+}
+
+function compareDates(a, b) {
+  // a, b formato 'YYYY-MM-DD'
+  if (!validateDate(a) || !validateDate(b)) return 0;
+  if (a === b) return 0;
+  return a > b ? 1 : -1;
 }

@@ -66,8 +66,8 @@ export default function HomeScreen() {
   const active = useHabitsStore((s) => s.active);
   const suggested = useHabitsStore((s) => s.suggested);
   const addSuggested = useHabitsStore((s) => s.addSuggested);
-  const isCompletedToday = useHabitsStore((s) => s.isCompletedToday);
-  const toggleCompleteToday = useHabitsStore((s) => s.toggleCompleteToday);
+  const getTodayCount = useHabitsStore((s) => s.getTodayCount);
+  const incrementCompleteToday = useHabitsStore((s) => s.incrementCompleteToday);
   const completions = useHabitsStore((s) => s.completions);
 
   const name = useMemo(() => {
@@ -94,11 +94,26 @@ export default function HomeScreen() {
     for (const k of keys) {
       const dayMap = completions[k] || {};
       for (const h of active) {
-        if (dayMap[h.id]) count += 1;
+        const raw = dayMap[h.id];
+        const val = typeof raw === 'boolean' ? (raw ? 1 : 0) : parseInt(raw || 0, 10);
+        const max = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+        if (val >= max) count += 1;
       }
     }
     return clamp(count / totalSlots, 0, 1);
   }, [completions, active]);
+
+  // Progreso por hábito (hoy): repeticiones completadas hoy / repeticiones requeridas
+  const perHabitProgress = useMemo(() => {
+    const res = {};
+    if (!active.length) return res;
+    for (const h of active) {
+      const max = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+      const cnt = getTodayCount(h.id);
+      res[h.id] = clamp(cnt / max, 0, 1);
+    }
+    return res;
+  }, [completions, active, getTodayCount]);
 
   return (
     <Container contentContainerStyle={{ paddingBottom: 40 }}>
@@ -114,11 +129,13 @@ export default function HomeScreen() {
             {active.some(a => a.title === daily.title) ? (
               (() => {
                 const h = active.find(a => a.title === daily.title);
-                const done = h ? isCompletedToday(h.id) : false;
+                const repeats = h ? Math.max(1, parseInt(h.dailyRepeats || 1, 10)) : 1;
+                const cnt = h ? getTodayCount(h.id) : 0;
+                const done = cnt >= repeats;
                 return (
-                  <CompleteButton done={done} onPress={() => h && toggleCompleteToday(h.id)}>
+                  <CompleteButton done={done} onPress={() => h && incrementCompleteToday(h.id)}>
                     <Ionicons name={done ? 'checkmark-circle' : 'radio-button-off'} size={16} color={done ? '#00110d' : '#cbd5e1'} />
-                    <CompleteText done={done}>{done ? 'Hecho' : 'Completar'}</CompleteText>
+                    <CompleteText done={done}>{done ? 'Hecho' : `Completar (${Math.min(cnt, repeats)}/${repeats})`}</CompleteText>
                   </CompleteButton>
                 );
               })()
@@ -161,12 +178,19 @@ export default function HomeScreen() {
                 right={
                   <Row>
                     <ProgressWrap>
-                      <ProgressBar value={((idx + 1) % 4) * 0.25} />
+                      <ProgressBar value={perHabitProgress[h.id] || 0} />
                     </ProgressWrap>
-                    <CompleteButton done={isCompletedToday(h.id)} onPress={() => toggleCompleteToday(h.id)} style={{ marginLeft: 8 }}>
-                      <Ionicons name={isCompletedToday(h.id) ? 'checkmark-circle' : 'radio-button-off'} size={16} color={isCompletedToday(h.id) ? '#00110d' : '#cbd5e1'} />
-                      <CompleteText done={isCompletedToday(h.id)}>{isCompletedToday(h.id) ? 'Hecho' : 'Completar'}</CompleteText>
-                    </CompleteButton>
+                    {(() => {
+                      const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+                      const cnt = getTodayCount(h.id);
+                      const done = cnt >= repeats;
+                      return (
+                        <CompleteButton done={done} onPress={() => incrementCompleteToday(h.id)} style={{ marginLeft: 8 }}>
+                          <Ionicons name={done ? 'checkmark-circle' : 'radio-button-off'} size={16} color={done ? '#00110d' : '#cbd5e1'} />
+                          <CompleteText done={done}>{done ? 'Hecho' : `Completar (${Math.min(cnt, repeats)}/${repeats})`}</CompleteText>
+                        </CompleteButton>
+                      );
+                    })()}
                   </Row>
                 }
               />
