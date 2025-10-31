@@ -34,6 +34,8 @@ export const useHabitsStore = create(
       // Lista de sugeridos y hábitos activos del usuario
       suggested: defaultSuggested,
       active: [], // cada item: {id, title, icon, frequency, time}
+      // Registro de completados por día: { 'YYYY-MM-DD': { [habitId]: true } }
+      completions: {},
 
       /**
        * Crea un hábito personalizado y lo agrega a activos.
@@ -69,12 +71,47 @@ export const useHabitsStore = create(
         const lq = q.toLowerCase();
         return list.filter((h) => h.title.toLowerCase().includes(lq) || h.desc.toLowerCase().includes(lq));
       },
+
+      /** Devuelve la clave de hoy en formato YYYY-MM-DD (local) */
+      _todayKey: () => {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      },
+      /** Marca/desmarca un hábito como completado hoy */
+      toggleCompleteToday: (habitId) => {
+        const key = get()._todayKey();
+        const prev = get().completions[key] || {};
+        const next = { ...prev, [habitId]: !prev[habitId] };
+        set({ completions: { ...get().completions, [key]: next } });
+      },
+      /** Indica si el hábito está completado hoy */
+      isCompletedToday: (habitId) => {
+        const key = get()._todayKey();
+        return !!get().completions[key]?.[habitId];
+      },
+      /** Obtiene claves de los últimos N días (incluye hoy) */
+      _lastNDaysKeys: (n = 7) => {
+        const keys = [];
+        const d = new Date();
+        for (let i = 0; i < n; i++) {
+          const di = new Date(d);
+          di.setDate(d.getDate() - i);
+          const y = di.getFullYear();
+          const m = String(di.getMonth() + 1).padStart(2, '0');
+          const day = String(di.getDate()).padStart(2, '0');
+          keys.push(`${y}-${m}-${day}`);
+        }
+        return keys;
+      },
     }),
     {
       name: 'smartsteps-habits',
       storage: createJSONStorage(() => AsyncStorage),
-      // Persistimos activos y sugeridos (por si se extiende el catálogo localmente)
-      partialize: (s) => ({ active: s.active, suggested: s.suggested })
+      // Persistimos activos, sugeridos y completions
+      partialize: (s) => ({ active: s.active, suggested: s.suggested, completions: s.completions })
     }
   )
 );

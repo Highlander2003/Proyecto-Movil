@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/auth';
 import { useHabitsStore } from '../store/habits';
 import { getDailyChallenge } from '../services/recommendations';
 import { clamp } from '../services/adaptive';
+import { Ionicons } from '@expo/vector-icons';
 
 // Pantalla de Inicio (Home)
 // - Actualmente es un stub (plantilla vacía) para el dashboard principal.
@@ -46,12 +47,28 @@ const Gap = styled.View`
   height: 12px;
 `;
 
+const CompleteButton = styled.TouchableOpacity`
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  background-color: ${({ done, theme }) => (done ? theme.colors.success : theme.colors.surfaceAlt)};
+  flex-direction: row; align-items: center;
+`;
+const CompleteText = styled.Text`
+  color: ${({ done }) => (done ? '#00110d' : '#cbd5e1')};
+  font-weight: 700;
+  margin-left: 6px;
+`;
+
 export default function HomeScreen() {
   // Datos de usuario y hábitos
   const user = useAuthStore((s) => s.user);
   const active = useHabitsStore((s) => s.active);
   const suggested = useHabitsStore((s) => s.suggested);
   const addSuggested = useHabitsStore((s) => s.addSuggested);
+  const isCompletedToday = useHabitsStore((s) => s.isCompletedToday);
+  const toggleCompleteToday = useHabitsStore((s) => s.toggleCompleteToday);
+  const completions = useHabitsStore((s) => s.completions);
 
   const name = useMemo(() => {
     const base = user?.displayName || user?.email?.split('@')[0] || 'Usuario';
@@ -59,7 +76,29 @@ export default function HomeScreen() {
   }, [user]);
 
   const daily = useMemo(() => getDailyChallenge({ active, suggested }), [active, suggested]);
-  const weeklyProgress = useMemo(() => clamp(active.length * 0.12, 0, 1), [active.length]);
+  const weeklyProgress = useMemo(() => {
+    const totalSlots = active.length * 7;
+    if (totalSlots === 0) return 0;
+    // Últimos 7 días desde hoy
+    const keys = [];
+    const d = new Date();
+    for (let i = 0; i < 7; i++) {
+      const di = new Date(d);
+      di.setDate(d.getDate() - i);
+      const y = di.getFullYear();
+      const m = String(di.getMonth() + 1).padStart(2, '0');
+      const day = String(di.getDate()).padStart(2, '0');
+      keys.push(`${y}-${m}-${day}`);
+    }
+    let count = 0;
+    for (const k of keys) {
+      const dayMap = completions[k] || {};
+      for (const h of active) {
+        if (dayMap[h.id]) count += 1;
+      }
+    }
+    return clamp(count / totalSlots, 0, 1);
+  }, [completions, active]);
 
   return (
     <Container contentContainerStyle={{ paddingBottom: 40 }}>
@@ -72,7 +111,20 @@ export default function HomeScreen() {
         <Card>
           <Row>
             <Title>{daily.icon}  {daily.title}</Title>
-            <Button title="Agregar" onPress={() => addSuggested(daily.id)} />
+            {active.some(a => a.title === daily.title) ? (
+              (() => {
+                const h = active.find(a => a.title === daily.title);
+                const done = h ? isCompletedToday(h.id) : false;
+                return (
+                  <CompleteButton done={done} onPress={() => h && toggleCompleteToday(h.id)}>
+                    <Ionicons name={done ? 'checkmark-circle' : 'radio-button-off'} size={16} color={done ? '#00110d' : '#cbd5e1'} />
+                    <CompleteText done={done}>{done ? 'Hecho' : 'Completar'}</CompleteText>
+                  </CompleteButton>
+                );
+              })()
+            ) : (
+              <Button title="Agregar" onPress={() => addSuggested(daily.id)} />
+            )}
           </Row>
           <Sub style={{ marginTop: 6 }}>{daily.desc}</Sub>
         </Card>
@@ -105,8 +157,18 @@ export default function HomeScreen() {
               <ListItem
                 icon={<TextEmoji>{h.icon || '✅'}</TextEmoji>}
                 title={h.title}
-                subtitle={h.frequency || 'Diario'}
-                right={<ProgressWrap><ProgressBar value={((idx + 1) % 4) * 0.25} /></ProgressWrap>}
+                subtitle={`${h.frequency || 'Diario'}${h.time ? ` • ${h.time}` : ''}`}
+                right={
+                  <Row>
+                    <ProgressWrap>
+                      <ProgressBar value={((idx + 1) % 4) * 0.25} />
+                    </ProgressWrap>
+                    <CompleteButton done={isCompletedToday(h.id)} onPress={() => toggleCompleteToday(h.id)} style={{ marginLeft: 8 }}>
+                      <Ionicons name={isCompletedToday(h.id) ? 'checkmark-circle' : 'radio-button-off'} size={16} color={isCompletedToday(h.id) ? '#00110d' : '#cbd5e1'} />
+                      <CompleteText done={isCompletedToday(h.id)}>{isCompletedToday(h.id) ? 'Hecho' : 'Completar'}</CompleteText>
+                    </CompleteButton>
+                  </Row>
+                }
               />
             </React.Fragment>
           ))
