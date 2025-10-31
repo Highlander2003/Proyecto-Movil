@@ -17,9 +17,16 @@ export const baseTheme = {
   },
 };
 
-export const createTheme = (mode = 'dark') => {
+export const createTheme = (mode = 'dark', textScale = 1) => {
   // Selecciona la paleta por modo
   const colors = mode === 'dark' ? darkColors : lightColors;
+  const scale = Number.isFinite(textScale) ? Math.max(0.75, Math.min(1.5, textScale)) : 1;
+  const scaledTypography = {
+    heading: Math.round(baseTheme.typography.heading * scale),
+    subheading: Math.round(baseTheme.typography.subheading * scale),
+    body: Math.round(baseTheme.typography.body * scale),
+    small: Math.round(baseTheme.typography.small * scale)
+  };
   return {
     // Modo activo ("dark" | "light")
     mode,
@@ -27,6 +34,7 @@ export const createTheme = (mode = 'dark') => {
     colors,
     // Tokens neutrales disponibles en theme.*
     ...baseTheme,
+    typography: scaledTypography,
     // Tokens de componentes comunes para uso consistente
     button: {
       height: 48,   // altura de botones principales

@@ -9,7 +9,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { initAuthListener, authSignIn, authRegister, authSignOut } from '../services/firebase';
+import { initAuthListener, authSignIn, authRegister, authSignOut, authUpdateDisplayName } from '../services/firebase';
 
 export const useAuthStore = create(
   persist(
@@ -80,6 +80,22 @@ export const useAuthStore = create(
       logout: async () => {
         try { await authSignOut(); } catch {}
         set({ user: null });
+      },
+      /**
+       * Actualiza el nombre visible del usuario (displayName) tanto en Firebase como en modo local.
+       */
+      updateDisplayName: async (displayName) => {
+        set({ loading: true, error: null });
+        try {
+          const updated = await authUpdateDisplayName(displayName);
+          if (updated) set({ user: updated });
+          return { ok: true, user: updated };
+        } catch (e) {
+          set({ error: e?.message || 'No se pudo actualizar el nombre' });
+          return { ok: false, error: e };
+        } finally {
+          set({ loading: false });
+        }
       }
     }),
     {

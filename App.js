@@ -31,6 +31,12 @@ function Navigation() {
   );
 }
 
+function ThemedStatusBar() {
+  const { themeName } = useAppTheme();
+  const isDark = themeName === 'dark';
+  return <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />;
+}
+
 export default function App() {
   // Configura el canal/permisos de notificaciones al iniciar la app (Android/iOS). En web puede no aplicar.
   useEffect(() => {
@@ -44,8 +50,8 @@ export default function App() {
       <AppThemeProvider>
         {/* Maneja padding automático para barra de estado/notch en iOS/Android */}
         <SafeAreaProvider>
-          {/* Color del texto de la barra de estado (puedes alternarlo según el tema si lo prefieres) */}
-          <StatusBar barStyle="light-content" />
+          {/* Barra de estado adaptativa al tema */}
+          <ThemedStatusBar />
           {/* Árbol de navegación de la app */}
           <Navigation />
         </SafeAreaProvider>

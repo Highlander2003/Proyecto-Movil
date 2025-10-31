@@ -11,7 +11,7 @@ import firebaseConfig from './firebase.config';
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 // Determina si se debe usar el modo local (sin backend) en base a la config
 const LOCAL_MODE = !firebaseConfig?.apiKey || String(firebaseConfig.apiKey).startsWith('YOUR_');
@@ -103,3 +103,69 @@ export async function authSignOut() {
 }
 
 export { db };
+
+/**
+ * Actualiza el displayName del usuario actual.
+ * - Modo local: actualiza el objeto guardado en AsyncStorage.
+ * - Firebase: usa updateProfile sobre el usuario actual.
+ * @param {string} displayName
+ * @returns {Promise<object|null>} usuario actualizado o null si no hay sesión
+ */
+export async function authUpdateDisplayName(displayName) {
+  const fb = getFirebase();
+  if (fb.local) {
+    const raw = await AsyncStorage.getItem('smartsteps-local-user');
+    const user = raw ? JSON.parse(raw) : null;
+    if (!user) return null;
+    const updated = { ...user, displayName };
+    await AsyncStorage.setItem('smartsteps-local-user', JSON.stringify(updated));
+    return updated;
+  }
+  const u = fb?.auth?.currentUser;
+  if (!u) return null;
+  await updateProfile(u, { displayName });
+  // Firebase actualiza el objeto en memoria
+  return fb.auth.currentUser;
+}
+
+/**
+ * Obtiene el perfil del usuario desde Firestore (users/{uid}) o almacenamiento local.
+ * @param {string} uid
+ * @returns {Promise<object|null>}
+ */
+export async function fetchUserProfile(uid) {
+  if (!uid) return null;
+  const fb = getFirebase();
+  if (fb.local) {
+    const raw = await AsyncStorage.getItem(`smartsteps-profile-${uid}`);
+    return raw ? JSON.parse(raw) : null;
+  }
+  if (!fb.db) return null;
+  const ref = doc(fb.db, 'users', uid);
+  const snap = await getDoc(ref);
+  return snap.exists() ? snap.data() : null;
+}
+
+/**
+ * Actualiza (merge) el perfil del usuario en Firestore o en almacenamiento local.
+ * @param {string} uid
+ * @param {object} data
+ * @returns {Promise<object>} perfil resultante
+ */
+export async function updateUserProfile(uid, data) {
+  if (!uid) return {};
+  const fb = getFirebase();
+  if (fb.local) {
+    const key = `smartsteps-profile-${uid}`;
+    const raw = await AsyncStorage.getItem(key);
+    const prev = raw ? JSON.parse(raw) : {};
+    const merged = { ...prev, ...data, updatedAt: Date.now() };
+    await AsyncStorage.setItem(key, JSON.stringify(merged));
+    return merged;
+  }
+  const ref = doc(fb.db, 'users', uid);
+  const payload = { ...data, updatedAt: serverTimestamp() };
+  await setDoc(ref, payload, { merge: true });
+  // Leer de vuelta no es estrictamente necesario, devolvemos merge local
+  return payload;
+}
