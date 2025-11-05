@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import styled, { useTheme } from 'styled-components/native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../components/Card';
@@ -135,6 +135,7 @@ export default function HabitsScreen() {
   const [offsetMinutes, setOffsetMinutes] = useState('60');
   const [toast, setToast] = useState('');
   const [editingId, setEditingId] = useState(null);
+  const [confirmDeleteHabit, setConfirmDeleteHabit] = useState(null); // objeto hábito a eliminar
 
   const freqOptions = ['Diario', 'Semanal', 'Días alternos'];
   const quickIcons = ['✅','💧','📘','🧘','🚶','🥗','😴','📝','🎨','🏃','🧠','🎯','🧹','🧴','🦷','📖','☀️','🌙'];
@@ -224,6 +225,11 @@ export default function HabitsScreen() {
   };
 
   const confirmDelete = (h) => {
+    // En web, algunos entornos no soportan múltiples botones en Alert; usamos modal propio
+    if (Platform.OS === 'web') {
+      setConfirmDeleteHabit(h);
+      return;
+    }
     Alert.alert(
       'Eliminar hábito',
       `¿Seguro que quieres eliminar "${h.title}"? Esta acción no se puede deshacer.`,
@@ -399,6 +405,27 @@ export default function HabitsScreen() {
         <Row style={{ marginTop: 12, justifyContent: 'flex-end' }}>
           <Button title="Cancelar" variant="ghost" onPress={() => { setShowNew(false); setEditingId(null); }} />
           <Button title="Guardar" onPress={saveNewHabit} style={{ opacity: (isNameValid && isTimeValid && isStartValid && isEndValid && isEndAfterStart) ? 1 : 0.6 }} />
+        </Row>
+      </ModalSheet>
+
+      {/* Confirmación de eliminación (compatible web) */}
+      <ModalSheet visible={!!confirmDeleteHabit} onClose={() => setConfirmDeleteHabit(null)}>
+        <Title style={{ marginBottom: 8 }}>Eliminar hábito</Title>
+        <Subtitle>¿Seguro que quieres eliminar "{confirmDeleteHabit?.title}"? Esta acción no se puede deshacer.</Subtitle>
+        <Row style={{ marginTop: 12, justifyContent: 'flex-end' }}>
+          <Button title="Cancelar" variant="ghost" onPress={() => setConfirmDeleteHabit(null)} />
+          <Button
+            title="Eliminar"
+            variant="danger"
+            onPress={() => {
+              if (confirmDeleteHabit) {
+                removeHabit(confirmDeleteHabit.id);
+                showToast('Hábito eliminado');
+              }
+              setConfirmDeleteHabit(null);
+            }}
+            style={{ marginLeft: 8 }}
+          />
         </Row>
       </ModalSheet>
 
