@@ -109,6 +109,12 @@ const IconTxt = styled.Text`
 const ErrorTxt = styled.Text`
   color: ${({ theme }) => theme.colors.danger}; font-size: 12px; margin-top: 4px;
 `;
+const IconButton = styled.TouchableOpacity`
+  width: 36px; height: 36px; border-radius: 18px;
+  align-items: center; justify-content: center;
+  background-color: ${({ theme }) => theme.colors.surfaceAlt};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+`;
 
 export default function HabitsScreen() {
   const theme = useTheme();
@@ -298,8 +304,12 @@ export default function HabitsScreen() {
                       </Texts>
                     </Left>
                     <Row>
-                      <Button title="Editar" variant="ghost" onPress={() => openEdit(h)} />
-                      <Button title="Eliminar" variant="danger" onPress={() => confirmDelete(h)} style={{ marginLeft: 8 }} />
+                      <IconButton onPress={() => openEdit(h)} accessibilityLabel={`Editar ${h.title}`}>
+                        <Ionicons name="create" size={18} color={theme.colors.text} />
+                      </IconButton>
+                      <IconButton onPress={() => confirmDelete(h)} style={{ marginLeft: 8 }} accessibilityLabel={`Eliminar ${h.title}`}>
+                        <Ionicons name="trash" size={18} color={theme.colors.danger} />
+                      </IconButton>
                     </Row>
                   </HabitRow>
                 </Card>
