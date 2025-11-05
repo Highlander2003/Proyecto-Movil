@@ -1,6 +1,16 @@
 import React from 'react';
 import styled from 'styled-components/native';
 
+// Botón reutilizable con variantes (primary, ghost, danger)
+// Props:
+// - title: texto del botón
+// - onPress: handler al presionar
+// - style: estilo adicional
+// - variant: 'primary' | 'ghost' | 'danger'
+// - left: elemento opcional a la izquierda (ícono, etc.)
+// Notas:
+// - Los colores y dimensiones provienen del tema
+// - Accesibilidad: usa accessibilityRole="button"
 const Base = styled.TouchableOpacity`
   height: ${({ theme }) => theme.button.height}px;
   border-radius: ${({ theme }) => theme.radius}px;

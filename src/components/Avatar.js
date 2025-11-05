@@ -1,6 +1,13 @@
 import React from 'react';
 import styled from 'styled-components/native';
 
+// Avatar con inicial del usuario
+// Props:
+// - name: nombre completo o identificador del usuario
+// Comportamiento:
+// - Muestra la primera letra del nombre en mayúscula
+// Accesibilidad:
+// - Usa accessibilityLabel para lectores de pantalla
 const Wrap = styled.View`
   width: 56px;
   height: 56px;

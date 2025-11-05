@@ -2,10 +2,21 @@ import React from 'react';
 import { Modal } from 'react-native';
 import styled from 'styled-components/native';
 
-const Backdrop = styled.TouchableOpacity`
+// Modal tipo "bottom sheet" simple
+// Props:
+// - visible: controla la visibilidad
+// - onClose: callback al cerrar
+// - children: contenido del sheet
+// Notas:
+// - Usa Modal nativo (iOS/Android)
+// - El backdrop cierra el modal al presionarlo
+const Root = styled.View`
   flex: 1;
   background-color: rgba(0,0,0,0.5);
   justify-content: flex-end;
+`;
+const BackdropTouch = styled.TouchableOpacity`
+  flex: 1;
 `;
 const Sheet = styled.View`
   background-color: ${({ theme }) => theme.colors.surface};
@@ -22,12 +33,15 @@ const Handle = styled.View`
 export default function ModalSheet({ visible, onClose, children }) {
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
-      <Backdrop activeOpacity={1} onPress={onClose}>
+      <Root>
+        {/* Zona del backdrop: tocando fuera del sheet cierra el modal */}
+        <BackdropTouch onPress={onClose} />
+        {/* Sheet: las interacciones aquí NO deben cerrar el modal */}
         <Sheet>
           <Handle />
           {children}
         </Sheet>
-      </Backdrop>
+      </Root>
     </Modal>
   );
 }

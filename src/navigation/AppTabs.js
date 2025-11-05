@@ -14,8 +14,10 @@ export default function AppTabs() {
   const theme = useTheme();
   return (
     <Tab.Navigator
+      // Configuración global de la barra de pestañas inferior
       screenOptions={({ route }) => ({
         headerShown: false,
+        // Estilo visual de la tab bar (colores desde el tema)
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
@@ -23,16 +25,20 @@ export default function AppTabs() {
           paddingTop: 6,
           paddingBottom: 10,
         },
+        // Ensancha el área de toque por item
         tabBarItemStyle: {
           minWidth: 72,
         },
+        // Label debajo del ícono para mejor legibilidad
         tabBarLabelPosition: 'below-icon',
         tabBarLabelStyle: {
           fontSize: 12,
           marginTop: 2,
         },
+        // Colores activos/inactivos (tema)
         tabBarActiveTintColor: theme.colors.accent,
         tabBarInactiveTintColor: theme.colors.textMuted,
+        // Mapeo de rutas a íconos de Ionicons
         tabBarIcon: ({ color, size, focused }) => {
           let name = 'home';
           if (route.name === 'Inicio') name = 'home';
@@ -44,6 +50,7 @@ export default function AppTabs() {
         },
       })}
     >
+      {/* Pestañas principales de la app */}
       <Tab.Screen name="Inicio" component={HomeScreen} />
       <Tab.Screen name="Hábitos" component={HabitsScreen} />
       <Tab.Screen name="Recordatorios" component={RemindersScreen} />

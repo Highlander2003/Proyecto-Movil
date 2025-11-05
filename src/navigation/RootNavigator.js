@@ -12,15 +12,17 @@ export default function RootNavigator() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Wait for zustand persist hydration
+    // Espera la hidratación de persistencia de Zustand para evitar parpadeos
     const t = setTimeout(() => setReady(true), 300);
     return () => clearTimeout(t);
   }, [hydrate]);
 
+  // Hasta que el store esté listo, no renderizar la navegación
   if (!ready) return null;
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {/* Si hay usuario autenticado, mostrar tabs de la app; si no, flujo de auth */}
       {user ? (
         <Stack.Screen name="AppTabs" component={AppTabs} />
       ) : (

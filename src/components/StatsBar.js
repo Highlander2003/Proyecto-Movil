@@ -2,6 +2,14 @@ import React from 'react';
 import styled from 'styled-components/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
+// Barra de estadísticas compacta con gradiente
+// Props:
+// - completed: total de hábitos completados
+// - streak: racha actual (días consecutivos)
+// - success: porcentaje de éxito (0-100)
+// Notas:
+// - Usa un gradiente para resaltar los valores
+// - Colores de texto claros para buen contraste
 const Wrap = styled.View`
   border-radius: ${({ theme }) => theme.radius}px;
   overflow: hidden;
