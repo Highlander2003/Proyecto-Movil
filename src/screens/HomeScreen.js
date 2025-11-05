@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import styled from 'styled-components/native';
 import Card from '../components/Card';
 import Button from '../components/Button';
@@ -20,9 +20,12 @@ import { Ionicons } from '@expo/vector-icons';
 //   4) Lista de hábitos activos con barra de progreso lineal
 // - Recomendación: reutilizar componentes (Card, ProgressBarCircular/Linear)
 //   y obtener datos desde el store de hábitos (Zustand) o Firestore si está configurado.
-const Container = styled.ScrollView`
+const Screen = styled.View`
   flex: 1;
   background-color: ${({ theme }) => theme.colors.background};
+`;
+const Container = styled.ScrollView`
+  flex: 1;
   padding: 16px;
 `;
 const Heading = styled.Text`
@@ -69,6 +72,7 @@ export default function HomeScreen() {
   const getTodayCount = useHabitsStore((s) => s.getTodayCount);
   const incrementCompleteToday = useHabitsStore((s) => s.incrementCompleteToday);
   const completions = useHabitsStore((s) => s.completions);
+  const updateHabit = useHabitsStore((s) => s.updateHabit);
 
   const name = useMemo(() => {
     const base = user?.displayName || user?.email?.split('@')[0] || 'Usuario';
@@ -115,8 +119,67 @@ export default function HomeScreen() {
     return res;
   }, [completions, active, getTodayCount]);
 
+  // Helpers para horarios exactos (formato "HH:MM AM/PM")
+  const parseExactToMinutes = useCallback((exact) => {
+    if (!exact || typeof exact !== 'string') return null;
+    const m = exact.trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+    if (!m) return null;
+    let hh = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    const ampm = m[3].toUpperCase();
+    if (hh === 12) hh = 0;
+    if (ampm === 'PM') hh += 12;
+    return hh * 60 + mm;
+  }, []);
+
+  const minutesToExact = useCallback((mins) => {
+    let total = ((mins % (24 * 60)) + 24 * 60) % (24 * 60);
+    let hh24 = Math.floor(total / 60);
+    const mm = total % 60;
+    const ampm = hh24 >= 12 ? 'PM' : 'AM';
+    let hh = hh24 % 12;
+    if (hh === 0) hh = 12;
+    const mmStr = String(mm).padStart(2, '0');
+    return `${hh}:${mmStr} ${ampm}`;
+  }, []);
+
+  // Próximo recordatorio (solo hábitos con horario exacto)
+  const nowMinutes = useMemo(() => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }, []);
+
+  const upcoming = useMemo(() => {
+    const items = [];
+    for (const h of active) {
+      if (h.scheduleType !== 'exact' || !h.exactTime) continue;
+      const m = parseExactToMinutes(h.exactTime);
+      if (m == null) continue;
+      let delta = m - nowMinutes;
+      let dayOffset = 0;
+      if (delta < 0) { // ya pasó hoy, considerar mañana
+        delta += 24 * 60;
+        dayOffset = 1;
+      }
+      items.push({ habit: h, minutes: m, delta, dayOffset });
+    }
+    items.sort((a, b) => a.delta - b.delta);
+    return items;
+  }, [active, nowMinutes, parseExactToMinutes]);
+
+  const nextItem = upcoming[0] || null;
+
+  const snooze30 = useCallback((h) => {
+    if (!h || h.scheduleType !== 'exact') return;
+    const m = parseExactToMinutes(h.exactTime);
+    if (m == null) return;
+    const next = minutesToExact(m + 30);
+    updateHabit(h.id, { exactTime: next });
+  }, [parseExactToMinutes, minutesToExact, updateHabit]);
+
   return (
-    <Container contentContainerStyle={{ paddingBottom: 40 }}>
+    <Screen>
+      <Container contentContainerStyle={{ paddingBottom: 40 }}>
       {/* Saludo */}
       <Heading>Hola, {name}</Heading>
 
@@ -148,6 +211,36 @@ export default function HomeScreen() {
       ) : null}
 
       <Gap />
+      {/* Próximo recordatorio */}
+      {nextItem ? (
+        <Card>
+          <Row>
+            <Title>Próximo: {nextItem.habit.title}</Title>
+            <Row>
+              {(() => {
+                const h = nextItem.habit;
+                const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+                const cnt = getTodayCount(h.id);
+                const done = cnt >= repeats;
+                return (
+                  <CompleteButton done={done} onPress={() => incrementCompleteToday(h.id)} style={{ marginRight: 8 }}>
+                    <Ionicons name={done ? 'checkmark-circle' : 'radio-button-off'} size={16} color={done ? '#00110d' : '#cbd5e1'} />
+                    <CompleteText done={done}>{done ? 'Hecho' : `Completar (${Math.min(cnt, repeats)}/${repeats})`}</CompleteText>
+                  </CompleteButton>
+                );
+              })()}
+              {nextItem.habit.scheduleType === 'exact' ? (
+                <Button title="Posponer 30 min" onPress={() => snooze30(nextItem.habit)} />
+              ) : null}
+            </Row>
+          </Row>
+          <Sub style={{ marginTop: 6 }}>
+            {nextItem.dayOffset === 0 ? 'Hoy' : 'Mañana'} a las {nextItem.habit.exactTime}
+          </Sub>
+        </Card>
+      ) : null}
+
+      <Gap />
       {/* Progreso semanal */}
       <Card>
         <Row style={{ alignItems: 'center' }}>
@@ -162,6 +255,26 @@ export default function HomeScreen() {
       </Card>
 
       <Gap />
+      {/* Próximos recordatorios (lista) */}
+      {upcoming.length > 1 ? (
+        <>
+          <Title>Próximos recordatorios</Title>
+          <Card style={{ marginTop: 8 }}>
+            {upcoming.slice(0, 3).map((it, idx) => (
+              <React.Fragment key={it.habit.id + '-' + idx}>
+                {idx > 0 ? <Divider /> : null}
+                <ListItem
+                  icon={<TextEmoji>{it.habit.icon || '⏰'}</TextEmoji>}
+                  title={it.habit.title}
+                  subtitle={`${it.dayOffset === 0 ? 'Hoy' : 'Mañana'} • ${it.habit.exactTime || ''}`}
+                />
+              </React.Fragment>
+            ))}
+          </Card>
+          <Gap />
+        </>
+      ) : null}
+
       {/* Hábitos activos */}
       <Title>Mis hábitos</Title>
       <Card style={{ marginTop: 8 }}>
@@ -198,7 +311,8 @@ export default function HomeScreen() {
           ))
         )}
       </Card>
-    </Container>
+      </Container>
+    </Screen>
   );
 }
 
