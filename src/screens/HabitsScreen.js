@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { Alert, Platform, Animated } from 'react-native';
 import styled, { useTheme } from 'styled-components/native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../components/Card';
@@ -67,16 +67,46 @@ const HDesc = styled.Text`
 `;
 const Texts = styled.View``;
 
-const ToastWrap = styled.View`
-  position: absolute; left: 0; right:0; top: 8px; align-items: center;
+const ToastContainer = styled.View`
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  align-items: center;
+  pointer-events: none;
 `;
-const ToastBadge = styled.View`
+const ToastWrap = styled(Animated.View)`
+  flex-direction: row;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 999px;
   background-color: ${({ theme }) => theme.colors.surface};
   border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: 24px; padding: 8px 12px;
+  gap: 12px;
+  shadow-color: #00000044;
+  shadow-opacity: 0.15;
+  shadow-radius: 12px;
+  elevation: 6;
+`;
+const ToastIcon = styled.View`
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background-color: ${({ theme }) => theme.colors.accent};
+  align-items: center;
+  justify-content: center;
+`;
+const ToastTexts = styled.View`
+  flex-shrink: 1;
+`;
+const ToastHeading = styled.Text`
+  color: ${({ theme }) => theme.colors.text};
+  font-weight: 800;
+  font-size: 14px;
 `;
 const ToastText = styled.Text`
-  color: ${({ theme }) => theme.colors.text};
+  color: ${({ theme }) => theme.colors.textMuted};
+  font-size: 12px;
 `;
 
 // Nuevos estilos para chips, etiquetas y grilla de iconos
@@ -142,6 +172,8 @@ export default function HabitsScreen() {
   const [toast, setToast] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [confirmDeleteHabit, setConfirmDeleteHabit] = useState(null); // objeto hábito a eliminar
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef(null);
 
   const freqOptions = ['Diario', 'Semanal', 'Días alternos'];
   const quickIcons = ['✅','💧','📘','🧘','🚶','🥗','😴','📝','🎨','🏃','🧠','🎯','🧹','🧴','🦷','📖','☀️','🌙'];
@@ -158,6 +190,15 @@ export default function HabitsScreen() {
 
   // Lista filtrada según la búsqueda
   const list = useMemo(() => searchSuggested(q), [q, searchSuggested]);
+  const activeByTitle = useMemo(() => {
+    const dict = {};
+    (active || []).forEach((h) => {
+      if (h?.title && !dict[h.title]) {
+        dict[h.title] = h;
+      }
+    });
+    return dict;
+  }, [active]);
 
   // Añade hábito sugerido por id y muestra confirmación
   const handleAddSuggested = (id, title) => {
@@ -167,9 +208,35 @@ export default function HabitsScreen() {
 
   // Utilidad para mostrar un toast temporal
   const showToast = (msg) => {
+    if (!msg) return;
     setToast(msg);
-    setTimeout(() => setToast(''), 1800);
+    if (toastTimer.current) {
+      clearTimeout(toastTimer.current);
+      toastTimer.current = null;
+    }
+    toastAnim.stopAnimation();
+    toastAnim.setValue(0);
+    Animated.timing(toastAnim, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastAnim, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start(() => setToast(''));
+    }, 1800);
   };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) {
+        clearTimeout(toastTimer.current);
+      }
+    };
+  }, []);
 
   // Crea un nuevo hábito personalizado a partir del modal
   const saveNewHabit = () => {
@@ -269,24 +336,27 @@ export default function HabitsScreen() {
           </Row>
 
           {/* Lista de sugeridos con botón para añadir al plan */}
-          {list.map((h) => (
-            <Card key={h.id} style={{ marginTop: 6 }}>
-              <HabitRow>
-                <Left>
-                  <IconWrap><Text style={{ fontSize: 18 }}>{h.icon}</Text></IconWrap>
-                  <Texts>
-                    <HTitle>{h.title}</HTitle>
-                    <HDesc>{h.desc}</HDesc>
-                  </Texts>
-                </Left>
-                <Button
-                  title="Añadir"
-                  onPress={() => handleAddSuggested(h.id, h.title)}
-                  left={<Ionicons name="add" size={16} color={'#00110d'} />}
-                />
-              </HabitRow>
-            </Card>
-          ))}
+          {list.map((h) => {
+            const existing = activeByTitle[h.title];
+            return (
+              <Card key={h.id} style={{ marginTop: 6 }}>
+                <HabitRow>
+                  <Left>
+                    <IconWrap><Text style={{ fontSize: 18 }}>{h.icon}</Text></IconWrap>
+                    <Texts>
+                      <HTitle>{h.title}</HTitle>
+                      <HDesc>{h.desc}</HDesc>
+                    </Texts>
+                  </Left>
+                  <Button
+                    title={existing ? 'Editar' : 'Añadir'}
+                    onPress={() => existing ? openEdit(existing) : handleAddSuggested(h.id, h.title)}
+                    left={<Ionicons name={existing ? 'create' : 'add'} size={16} color={'#00110d'} />}
+                  />
+                </HabitRow>
+              </Card>
+            );
+          })}
 
           {/* Mis hábitos activos (CRUD: editar/eliminar) */}
           {active && active.length > 0 ? (
@@ -441,11 +511,22 @@ export default function HabitsScreen() {
 
       {/* Toast temporal de confirmación */}
       {toast ? (
-        <ToastWrap pointerEvents="none">
-          <ToastBadge>
-            <ToastText>{toast}</ToastText>
-          </ToastBadge>
-        </ToastWrap>
+        <ToastContainer>
+          <ToastWrap
+            style={{
+              opacity: toastAnim,
+              transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-16, 0] }) }],
+            }}
+          >
+            <ToastIcon>
+              <Ionicons name="checkmark" size={20} color="#00110d" />
+            </ToastIcon>
+            <ToastTexts>
+              <ToastHeading>¡Hábito guardado!</ToastHeading>
+              <ToastText>{toast}</ToastText>
+            </ToastTexts>
+          </ToastWrap>
+        </ToastContainer>
       ) : null}
     </>
   );
