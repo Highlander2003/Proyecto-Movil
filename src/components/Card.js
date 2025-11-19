@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import styled from 'styled-components/native';
 
 // Contenedor base tipo tarjeta
@@ -11,6 +11,8 @@ const Wrapper = styled.View`
   padding: ${({ theme }) => theme.card.padding}px;
 `;
 
-export default function Card({ children, style }) {
-  return <Wrapper style={style}>{children}</Wrapper>;
-}
+const Card = forwardRef(({ children, style }, ref) => {
+  return <Wrapper ref={ref} style={style}>{children}</Wrapper>;
+});
+
+export default Card;

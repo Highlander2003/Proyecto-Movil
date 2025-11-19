@@ -13,6 +13,7 @@ import { useProfileStore } from '../store/profile';
 import { Ionicons } from '@expo/vector-icons';
 import { Switch as RNSwitch } from 'react-native';
 import ModalSheet from '../components/ModalSheet';
+import { useTutorial, useTutorialTarget } from '../components/TutorialProvider';
 
 // Pantalla de Perfil
 // - Muestra avatar/nombre del usuario, fecha "Miembro desde"
@@ -123,14 +124,18 @@ export default function ProfileScreen() {
     loadRemoteProfile(user.uid);
   }, [user?.uid, loadRemoteProfile]);
 
+  const { start } = useTutorial();
+
   return (
     <Screen contentContainerStyle={{ paddingBottom: 40 }}>
       <Content>
         <Title>Perfil</Title>
         <Subtitle>Personaliza tu experiencia</Subtitle>
 
+  <Button title="Iniciar tutorial" variant="ghost" onPress={() => start()} />
+
         {/* Cabecera de perfil con avatar y nombre */}
-        <Card>
+        <Card ref={useTutorialTarget('profile_header')}>
           <Row>
             <Avatar name={name} />
             <Row style={{ flex: 1, justifyContent: 'space-between' }}>

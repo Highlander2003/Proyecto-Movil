@@ -39,6 +39,7 @@ La idea es mejorar la usabilidad con un comportamiento "inteligente" sin depende
 En Inicio (Home):
 - Verás un saludo con tu nombre.
 - Una tarjeta con el "Reto de hoy" recomendado y un botón para agregarlo a tus hábitos.
+- La tarjeta indica explícitamente "Recomendación generada por IA" para dar transparencia.
 - Un progreso semanal circular (demostrativo). 
 - Lista de hábitos activos con barras de progreso.
 

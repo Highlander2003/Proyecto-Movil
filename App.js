@@ -15,6 +15,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import AppThemeProvider, { useAppTheme } from './src/theme/ThemeProvider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { configureNotifications } from './src/services/notifications';
+import TutorialProvider from './src/components/TutorialProvider';
 
 // Oculta avisos ruidosos no críticos en desarrollo
 LogBox.ignoreLogs(['AsyncStorage has been extracted']);
@@ -50,10 +51,13 @@ export default function App() {
       <AppThemeProvider>
         {/* Maneja padding automático para barra de estado/notch en iOS/Android */}
         <SafeAreaProvider>
-          {/* Barra de estado adaptativa al tema */}
-          <ThemedStatusBar />
-          {/* Árbol de navegación de la app */}
-          <Navigation />
+          {/* Tutorial provider para guías interactivas */}
+          <TutorialProvider>
+            {/* Barra de estado adaptativa al tema */}
+            <ThemedStatusBar />
+            {/* Árbol de navegación de la app */}
+            <Navigation />
+          </TutorialProvider>
         </SafeAreaProvider>
       </AppThemeProvider>
     </GestureHandlerRootView>

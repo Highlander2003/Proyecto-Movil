@@ -136,6 +136,99 @@ export const useHabitsStore = create(
         return keys;
       },
 
+      /** Comprueba si un hábito está activo en una fecha (toma en cuenta startDate/endDate y frequency 'Diario') */
+      _isHabitActiveOn: (habit, dateKey) => {
+        if (!habit) return false;
+        // frecuencia simple: solo considerar hábitos diarios para la racha
+        if (!habit.frequency || !String(habit.frequency).toLowerCase().includes('diario')) return false;
+        // comparar fechas (YYYY-MM-DD)
+        if (habit.startDate && habit.startDate > dateKey) return false;
+        if (habit.endDate && habit.endDate < dateKey) return false;
+        return true;
+      },
+
+      /** Comprueba si todos los hábitos diarios activos estuvieron completados al menos 1 vez en la fecha dada */
+      _areAllDailyCompletedOn: (dateKey) => {
+        const active = get().active || [];
+        const comps = get().completions || {};
+        const map = comps[dateKey] || {};
+        // Filtrar hábitos que cuentan para la racha
+        const dailyHabits = active.filter((h) => get()._isHabitActiveOn(h, dateKey));
+        if (dailyHabits.length === 0) return false; // si no hay hábitos diarios, no se considera racha
+        // Para cada hábito, verificar que tenga al menos 1 completado
+        for (const h of dailyHabits) {
+          const count = get()._toCount(map[h.id]);
+          if (count <= 0) return false;
+        }
+        return true;
+      },
+
+      /** Calcula la racha actual: días consecutivos (incluyendo hoy) donde se completaron todos los hábitos diarios activos */
+      getStreak: (maxLookback = 365) => {
+        let streak = 0;
+        const d = new Date();
+        for (let i = 0; i < maxLookback; i++) {
+          const di = new Date(d);
+          di.setDate(d.getDate() - i);
+          const y = di.getFullYear();
+          const m = String(di.getMonth() + 1).padStart(2, '0');
+          const day = String(di.getDate()).padStart(2, '0');
+          const key = `${y}-${m}-${day}`;
+          if (get()._areAllDailyCompletedOn(key)) {
+            streak += 1;
+          } else {
+            break;
+          }
+        }
+        return streak;
+      },
+
+      /** Devuelve los conteos totales (sumatoria de completions) para los últimos N días
+       *  Retorna un objeto { keys: [dateKey...], counts: [n...] } con el orden desde el día más antiguo hasta hoy
+       */
+      getCountsForLastNDays: (n = 7) => {
+        const keys = get()._lastNDaysKeys(n).reverse().slice(0, n).reverse();
+        // _lastNDaysKeys ya devuelve [today, yesterday, ...] — queremos oldest..today
+        // Para evitar confusión, regeneremos con orden oldest..today
+        const d = new Date();
+        const keysOrdered = [];
+        for (let i = n - 1; i >= 0; i--) {
+          const di = new Date(d);
+          di.setDate(d.getDate() - i);
+          const y = di.getFullYear();
+          const m = String(di.getMonth() + 1).padStart(2, '0');
+          const day = String(di.getDate()).padStart(2, '0');
+          keysOrdered.push(`${y}-${m}-${day}`);
+        }
+
+        const comps = get().completions || {};
+        const counts = keysOrdered.map((k) => {
+          const map = comps[k] || {};
+          // sum of counts (compat boolean/int)
+          let sum = 0;
+          Object.values(map).forEach((v) => {
+            sum += get()._toCount(v);
+          });
+          return sum;
+        });
+        return { keys: keysOrdered, counts };
+      },
+
+      /** Devuelve la suma total de completados registrados en el store (acumulado histórico)
+       *  Suma todos los valores en `completions` (compat boolean/int)
+       */
+      getTotalCompletions: () => {
+        const comps = get().completions || {};
+        let total = 0;
+        Object.values(comps).forEach((map) => {
+          if (!map) return;
+          Object.values(map).forEach((v) => {
+            total += get()._toCount(v);
+          });
+        });
+        return total;
+      },
+
       /** Actualiza un hábito existente por id con los campos proporcionados */
       updateHabit: (id, patch) => set({
         active: get().active.map((h) => h.id === id ? normalizeHabit({ ...h, ...patch, id }) : h)

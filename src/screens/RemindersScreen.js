@@ -4,11 +4,11 @@ import styled, { useTheme } from 'styled-components/native';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import ListItem from '../components/ListItem';
-import ProgressBar from '../components/ProgressBar';
 import ModalSheet from '../components/ModalSheet';
 import { useHabitsStore } from '../store/habits';
 import { useSettingsStore } from '../store/settings';
 import { Ionicons } from '@expo/vector-icons';
+import { useTutorialTarget } from '../components/TutorialProvider';
 import { useNavigation } from '@react-navigation/native';
 
 // Estilos base
@@ -39,11 +39,21 @@ const Chips = styled.View`
   flex-direction: row; flex-wrap: wrap; gap: 8px;
 `;
 const Chip = styled.TouchableOpacity`
-  padding: 8px 12px; border-radius: 999px; border: 1px solid ${({ theme }) => theme.colors.border};
-  background-color: ${({ active, theme }) => active ? theme.colors.accent : theme.colors.surfaceAlt};
+  padding: 8px 10px; border-radius: 999px; border: 1px solid ${({ theme, active, color }) => active ? (color || theme.colors.accent) : theme.colors.border};
+  background-color: ${({ active, theme, color }) => active ? (color || theme.colors.accent) : theme.colors.surfaceAlt};
+  flex-direction: row; align-items: center; gap: 8px;
+`;
+const ChipIcon = styled.View`
+  width: 18px; height: 18px; align-items: center; justify-content: center;
 `;
 const ChipText = styled.Text`
-  color: ${({ active }) => active ? '#00110d' : '#cbd5e1'}; font-weight: 700;
+  color: ${({ active }) => active ? '#00110d' : '#cbd5e1'}; font-weight: 700; font-size: 12px;
+`;
+const ChipBadge = styled.View`
+  min-width: 20px; padding: 2px 6px; background-color: rgba(0,0,0,0.12); border-radius: 12px; align-items: center; justify-content: center;
+`;
+const ChipBadgeText = styled.Text`
+  color: ${({ theme }) => theme.colors.text}; font-size: 11px; font-weight: 700;
 `;
 const Search = styled.TextInput`
   flex: 1;
@@ -122,8 +132,11 @@ export default function RemindersScreen() {
   const [tab, setTab] = useState('Hoy'); // 'Hoy' | 'Semana' | 'Todos'
   const [q, setQ] = useState('');
   const [typeFilter, setTypeFilter] = useState('all'); // all | exact | offset
-  const [freqFilter, setFreqFilter] = useState('all'); // all | Diario | Semanal | Días alternos
-  const [stateFilter, setStateFilter] = useState('all'); // all | pending | done
+  // freqFilter ahora puede ser multi-selección (array). 'all' significa todos
+  const [freqFilter, setFreqFilter] = useState(['all']); // ['all'] | ['Diario'] | ['Diario','Semanal']
+  const [stateFilter, setStateFilter] = useState('all'); // all | pending | done | overdue
+  const [timeFilter, setTimeFilter] = useState('all'); // all | upcoming | overdue | next1h | next4h
+  const [filtersVisible, setFiltersVisible] = useState(false);
 
   // Edit modal
   const [editing, setEditing] = useState(null); // habit
@@ -145,15 +158,50 @@ export default function RemindersScreen() {
     if (typeFilter !== 'all') {
       list = list.filter((h) => (typeFilter === 'exact' ? h.scheduleType === 'exact' : h.scheduleType === 'offset'));
     }
-    if (freqFilter !== 'all') {
-      list = list.filter((h) => (h.frequency || 'Diario') === freqFilter);
+    if (!(Array.isArray(freqFilter) && freqFilter.includes('all'))) {
+      // filtrar por cualquiera de las frecuencias seleccionadas
+      const allowed = Array.isArray(freqFilter) ? freqFilter : [freqFilter];
+      list = list.filter((h) => allowed.includes(h.frequency || 'Diario'));
     }
     if (stateFilter !== 'all') {
       list = list.filter((h) => {
         const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
         const cnt = getTodayCount(h.id);
         const done = cnt >= repeats;
-        return stateFilter === 'done' ? done : !done;
+        if (stateFilter === 'done') return done;
+        if (stateFilter === 'pending') return !done;
+        if (stateFilter === 'overdue') {
+          // overdue = exact time passed and not done
+          if (h.scheduleType !== 'exact') return false;
+          const m = parseExactToMinutes(h.exactTime || '08:00 AM');
+          if (m == null) return false;
+          return m < nowMinutes && !done;
+        }
+        return !done;
+      });
+    }
+    // Filtrado por ventana temporal (upcoming/next1h/next4h/overdue)
+    if (timeFilter !== 'all') {
+      list = list.filter((h) => {
+        if (h.scheduleType !== 'exact') return false;
+        const m = parseExactToMinutes(h.exactTime || '08:00 AM');
+        if (m == null) return false;
+        if (timeFilter === 'upcoming') {
+          return m >= nowMinutes;
+        }
+        if (timeFilter === 'next1h') {
+          return m >= nowMinutes && m <= nowMinutes + 60;
+        }
+        if (timeFilter === 'next4h') {
+          return m >= nowMinutes && m <= nowMinutes + 240;
+        }
+        if (timeFilter === 'overdue') {
+          const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+          const cnt = getTodayCount(h.id);
+          const done = cnt >= repeats;
+          return m < nowMinutes && !done;
+        }
+        return true;
       });
     }
     return list;
@@ -254,6 +302,59 @@ export default function RemindersScreen() {
   );
 
   // Cabecera
+  // helpers para mostrar counts en chips (sin aplicar filtros actuales)
+  const countForType = useCallback((t) => {
+    if (t === 'all') return (active || []).length;
+    if (t === 'exact') return (active || []).filter((h) => h.scheduleType === 'exact').length;
+    if (t === 'offset') return (active || []).filter((h) => h.scheduleType === 'offset').length;
+    return 0;
+  }, [active]);
+
+  const countForFreq = useCallback((f) => {
+    if (f === 'all') return (active || []).length;
+    return (active || []).filter((h) => (h.frequency || 'Diario') === f).length;
+  }, [active]);
+
+  const countForState = useCallback((s) => {
+    if (s === 'all') return (active || []).length;
+    if (s === 'done') return (active || []).filter((h) => {
+      const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+      return getTodayCount(h.id) >= repeats;
+    }).length;
+    if (s === 'pending') return (active || []).filter((h) => {
+      const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+      return getTodayCount(h.id) < repeats;
+    }).length;
+    if (s === 'overdue') return (active || []).filter((h) => {
+      if (h.scheduleType !== 'exact') return false;
+      const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+      const done = getTodayCount(h.id) >= repeats;
+      const m = parseExactToMinutes(h.exactTime || '08:00 AM');
+      return m != null && m < nowMinutes && !done;
+    }).length;
+    return 0;
+  }, [active, getTodayCount, nowMinutes]);
+
+  const countForTime = useCallback((t) => {
+    if (t === 'all') return (active || []).length;
+    if (t === 'upcoming') return (active || []).filter((h) => h.scheduleType === 'exact' && parseExactToMinutes(h.exactTime || '08:00 AM') >= nowMinutes).length;
+    if (t === 'next1h') return (active || []).filter((h) => h.scheduleType === 'exact' && (() => { const m = parseExactToMinutes(h.exactTime || '08:00 AM'); return m != null && m >= nowMinutes && m <= nowMinutes + 60; })()).length;
+    if (t === 'next4h') return (active || []).filter((h) => h.scheduleType === 'exact' && (() => { const m = parseExactToMinutes(h.exactTime || '08:00 AM'); return m != null && m >= nowMinutes && m <= nowMinutes + 240; })()).length;
+    if (t === 'overdue') return (active || []).filter((h) => h.scheduleType === 'exact' && (() => { const m = parseExactToMinutes(h.exactTime || '08:00 AM'); const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10)); const done = getTodayCount(h.id) >= repeats; return m != null && m < nowMinutes && !done; })()).length;
+    return 0;
+  }, [active, getTodayCount, nowMinutes]);
+
+  // número de filtros activos (para mostrar en el botón Filtros)
+  const activeFiltersCount = useMemo(() => {
+    let c = 0;
+    if (typeFilter !== 'all') c += 1;
+    if (!(Array.isArray(freqFilter) && freqFilter.includes('all'))) c += Array.isArray(freqFilter) ? Math.max(1, freqFilter.length) : 1;
+    if (stateFilter !== 'all') c += 1;
+    if (timeFilter !== 'all') c += 1;
+    if (q && q.trim()) c += 1;
+    return c;
+  }, [typeFilter, freqFilter, stateFilter, timeFilter, q]);
+
   const Header = () => (
     <Card>
       <Wrap>
@@ -274,7 +375,7 @@ export default function RemindersScreen() {
           </Row>
         </Row>
 
-        <Row style={{ gap: 8 }}>
+        <Row style={{ gap: 8, marginTop: 8 }}>
           <Search
             placeholder="Buscar hábito..."
             placeholderTextColor={theme.colors.textMuted}
@@ -282,25 +383,25 @@ export default function RemindersScreen() {
             onChangeText={setQ}
           />
         </Row>
-        <Row style={{ gap: 8, flexWrap: 'wrap' }}>
-          {/* Tipo */}
-          {['all','exact','offset'].map((t) => (
-            <Chip key={t} active={typeFilter === t} onPress={() => setTypeFilter(t)}>
-              <ChipText active={typeFilter === t}>Tipo: {t}</ChipText>
-            </Chip>
-          ))}
-          {/* Frecuencia */}
-          {['all','Diario','Semanal','Días alternos'].map((f) => (
-            <Chip key={f} active={freqFilter === f} onPress={() => setFreqFilter(f)}>
-              <ChipText active={freqFilter === f}>Freq: {f}</ChipText>
-            </Chip>
-          ))}
-          {/* Estado */}
-          {['all','pending','done'].map((s) => (
-            <Chip key={s} active={stateFilter === s} onPress={() => setStateFilter(s)}>
-              <ChipText active={stateFilter === s}>Estado: {s}</ChipText>
-            </Chip>
-          ))}
+
+        <Row style={{ gap: 8, marginTop: 10 }}>
+          {/* ref para tutorial */}
+          <Chip ref={useTutorialTarget('reminders_filters')} onPress={() => setFiltersVisible(true)} active={activeFiltersCount > 0}>
+            <ChipIcon>
+              <Ionicons name="filter" size={14} color={activeFiltersCount > 0 ? '#00110d' : '#9aa4b2'} />
+            </ChipIcon>
+            <ChipText active={activeFiltersCount > 0}>Filtros</ChipText>
+            <ChipBadge>
+              <ChipBadgeText>{activeFiltersCount}</ChipBadgeText>
+            </ChipBadge>
+          </Chip>
+
+          <Chip onPress={() => { setFreqFilter(['all']); setTypeFilter('all'); setStateFilter('all'); setTimeFilter('all'); setQ(''); }}>
+            <ChipIcon>
+              <Ionicons name="reload" size={14} color={'#9aa4b2'} />
+            </ChipIcon>
+            <ChipText active={false}>Limpiar</ChipText>
+          </Chip>
         </Row>
       </Wrap>
     </Card>
@@ -343,6 +444,99 @@ export default function RemindersScreen() {
       <Container contentContainerStyle={{ paddingBottom: 48 }}>
         {/* Cabecera con filtros y toggle notificaciones */}
         <Header />
+
+        {/* Modal de filtros simplificado */}
+        <ModalSheet visible={filtersVisible} onClose={() => setFiltersVisible(false)}>
+          <Title>Filtros</Title>
+          <Subtitle style={{ marginTop: 8 }}>Ajusta los filtros para ver los recordatorios que te interesan</Subtitle>
+          <Wrap style={{ marginTop: 12 }}>
+            <Row style={{ gap: 8, flexWrap: 'wrap' }}>
+              {/* Tipo */}
+              {['all','exact','offset'].map((t) => (
+                <Chip key={t} active={typeFilter === t} onPress={() => setTypeFilter(t)} color={t === 'exact' ? '#ffe8d6' : t === 'offset' ? '#e6f7ff' : undefined}>
+                  <ChipIcon>
+                    <Ionicons name={t === 'exact' ? 'time' : t === 'offset' ? 'timer-outline' : 'layers'} size={14} color={typeFilter === t ? '#00110d' : '#9aa4b2'} />
+                  </ChipIcon>
+                  <ChipText active={typeFilter === t}>{t === 'all' ? 'Tipo: Todos' : t === 'exact' ? 'Exactos' : 'Offset'}</ChipText>
+                  <ChipBadge>
+                    <ChipBadgeText>{countForType(t)}</ChipBadgeText>
+                  </ChipBadge>
+                </Chip>
+              ))}
+            </Row>
+
+            <Row style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              {/* Frecuencia (multi-select) */}
+              {['all','Diario','Semanal','Días alternos'].map((f) => {
+                const active = Array.isArray(freqFilter) ? freqFilter.includes(f) : freqFilter === f;
+                return (
+                  <Chip
+                    key={f}
+                    active={active}
+                    onPress={() => {
+                      if (f === 'all') {
+                        setFreqFilter(['all']);
+                        return;
+                      }
+                      setFreqFilter((prev) => {
+                        const arr = Array.isArray(prev) ? prev.slice() : [prev];
+                        const idxAll = arr.indexOf('all');
+                        if (idxAll !== -1) arr.splice(idxAll, 1);
+                        const idx = arr.indexOf(f);
+                        if (idx === -1) arr.push(f); else arr.splice(idx, 1);
+                        if (arr.length === 0) return ['all'];
+                        return arr;
+                      });
+                    }}
+                  >
+                    <ChipIcon>
+                      <Ionicons name={'calendar'} size={14} color={active ? '#00110d' : '#9aa4b2'} />
+                    </ChipIcon>
+                    <ChipText active={active}>Freq: {f}</ChipText>
+                    <ChipBadge>
+                      <ChipBadgeText>{countForFreq(f)}</ChipBadgeText>
+                    </ChipBadge>
+                  </Chip>
+                );
+              })}
+            </Row>
+
+            <Row style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              {/* Estado */}
+              {['all','pending','done','overdue'].map((s) => (
+                <Chip key={s} active={stateFilter === s} onPress={() => setStateFilter(s)} color={s === 'done' ? '#e6ffef' : s === 'overdue' ? '#ffecec' : undefined}>
+                  <ChipIcon>
+                    <Ionicons name={s === 'done' ? 'checkmark-done' : s === 'overdue' ? 'alert' : 'time-outline'} size={14} color={stateFilter === s ? '#00110d' : '#9aa4b2'} />
+                  </ChipIcon>
+                  <ChipText active={stateFilter === s}>{s === 'all' ? 'Estado: Todos' : s === 'overdue' ? 'Atrasados' : `Estado: ${s}`}</ChipText>
+                  <ChipBadge>
+                    <ChipBadgeText>{countForState(s)}</ChipBadgeText>
+                  </ChipBadge>
+                </Chip>
+              ))}
+            </Row>
+
+            <Row style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              {/* Time window filters */}
+              {['all','upcoming','next1h','next4h','overdue'].map((t) => (
+                <Chip key={'time-'+t} active={timeFilter === t} onPress={() => setTimeFilter(t)} color={t === 'overdue' ? '#fff1f0' : undefined}>
+                  <ChipIcon>
+                    <Ionicons name={t === 'next1h' ? 'time' : t === 'next4h' ? 'alarm' : t === 'upcoming' ? 'navigate' : t === 'overdue' ? 'warning' : 'time-outline'} size={14} color={timeFilter === t ? '#00110d' : '#9aa4b2'} />
+                  </ChipIcon>
+                  <ChipText active={timeFilter === t}>{t === 'all' ? 'Tiempo: Todos' : t === 'upcoming' ? 'Próximos' : t === 'next1h' ? '1h' : t === 'next4h' ? '4h' : 'Atrasados'}</ChipText>
+                  <ChipBadge>
+                    <ChipBadgeText>{countForTime(t)}</ChipBadgeText>
+                  </ChipBadge>
+                </Chip>
+              ))}
+            </Row>
+
+            <Row style={{ justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <Button variant="ghost" title="Limpiar" onPress={() => { setFreqFilter(['all']); setTypeFilter('all'); setStateFilter('all'); setTimeFilter('all'); setQ(''); setFiltersVisible(false); }} />
+              <Button title="Aplicar" onPress={() => setFiltersVisible(false)} />
+            </Row>
+          </Wrap>
+        </ModalSheet>
 
         {/* Siguiente */}
         {nextItem ? (

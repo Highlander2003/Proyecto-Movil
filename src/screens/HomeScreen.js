@@ -7,6 +7,7 @@ import CircularProgress from '../components/CircularProgress';
 import ProgressBar from '../components/ProgressBar';
 import { useAuthStore } from '../store/auth';
 import { useHabitsStore } from '../store/habits';
+import { useProfileStore } from '../store/profile';
 import { getDailyChallenge } from '../services/recommendations';
 import { clamp } from '../services/adaptive';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,10 +75,14 @@ export default function HomeScreen() {
   const completions = useHabitsStore((s) => s.completions);
   const updateHabit = useHabitsStore((s) => s.updateHabit);
 
+  const preferredName = useProfileStore((s) => s.preferredName);
   const name = useMemo(() => {
-    const base = user?.displayName || user?.email?.split('@')[0] || 'Usuario';
-    return base.charAt(0).toUpperCase() + base.slice(1);
-  }, [user]);
+    // Preferir nombre preferido del perfil, luego displayName, luego fallback al email sin mostrar sólo la parte local
+    const base = preferredName || user?.displayName || null;
+    if (base) return base.charAt(0).toUpperCase() + base.slice(1);
+    // Si no hay nombre ni displayName, mostrar 'Usuario' en vez de la parte del email
+    return 'Usuario';
+  }, [user, preferredName]);
 
   const daily = useMemo(() => getDailyChallenge({ active, suggested }), [active, suggested]);
   const weeklyProgress = useMemo(() => {
@@ -187,6 +192,10 @@ export default function HomeScreen() {
       {/* Reto de hoy */}
       {daily ? (
         <Card>
+          <AIBadge>
+            <BadgeEmoji>🤖</BadgeEmoji>
+            <BadgeText>Recomendación generada por IA</BadgeText>
+          </AIBadge>
           <Row>
             <Title>{daily.icon}  {daily.title}</Title>
             {active.some(a => a.title === daily.title) ? (
@@ -281,34 +290,34 @@ export default function HomeScreen() {
         {active.length === 0 ? (
           <Sub>No tienes hábitos activos aún. Agrega el reto de hoy para comenzar.</Sub>
         ) : (
-          active.map((h, idx) => (
-            <React.Fragment key={h.id}>
-              {idx > 0 ? <Divider /> : null}
-              <ListItem
-                icon={<TextEmoji>{h.icon || '✅'}</TextEmoji>}
-                title={h.title}
-                subtitle={`${h.frequency || 'Diario'}${h.time ? ` • ${h.time}` : ''}`}
-                right={
-                  <Row>
-                    <ProgressWrap>
-                      <ProgressBar value={perHabitProgress[h.id] || 0} />
-                    </ProgressWrap>
-                    {(() => {
-                      const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
-                      const cnt = getTodayCount(h.id);
-                      const done = cnt >= repeats;
-                      return (
-                        <CompleteButton done={done} onPress={() => incrementCompleteToday(h.id)} style={{ marginLeft: 8 }}>
-                          <Ionicons name={done ? 'checkmark-circle' : 'radio-button-off'} size={16} color={done ? '#00110d' : '#cbd5e1'} />
-                          <CompleteText done={done}>{done ? 'Hecho' : `Completar (${Math.min(cnt, repeats)}/${repeats})`}</CompleteText>
-                        </CompleteButton>
-                      );
-                    })()}
-                  </Row>
-                }
-              />
-            </React.Fragment>
-          ))
+          active.map((h, idx) => {
+            const repeats = Math.max(1, parseInt(h.dailyRepeats || 1, 10));
+            const cnt = getTodayCount(h.id);
+            const done = cnt >= repeats;
+            return (
+              <React.Fragment key={h.id}>
+                {idx > 0 ? <Divider /> : null}
+                <HabitRow>
+                  <HabitTop>
+                    <HabitInfo>
+                      <HabitTitle>
+                        <TextEmoji style={{ marginRight: 8 }}>{h.icon || '✅'}</TextEmoji>
+                        {h.title}
+                      </HabitTitle>
+                      <HabitSub>{h.frequency || 'Diario'}{h.time ? ` • ${h.time}` : ''}</HabitSub>
+                    </HabitInfo>
+                    <CompleteButton done={done} onPress={() => incrementCompleteToday(h.id)}>
+                      <Ionicons name={done ? 'checkmark-circle' : 'radio-button-off'} size={16} color={done ? '#00110d' : '#cbd5e1'} />
+                      <CompleteText done={done}>{done ? 'Hecho' : `Completar (${Math.min(cnt, repeats)}/${repeats})`}</CompleteText>
+                    </CompleteButton>
+                  </HabitTop>
+                  <ProgressWrap>
+                    <ProgressBar value={perHabitProgress[h.id] || 0} />
+                  </ProgressWrap>
+                </HabitRow>
+              </React.Fragment>
+            );
+          })
         )}
       </Card>
       </Container>
@@ -326,5 +335,55 @@ const TextEmoji = styled.Text`
 `;
 
 const ProgressWrap = styled.View`
-  width: 120px;
+  width: 100%;
+`;
+
+const HabitRow = styled.View`
+  padding: 14px 12px;
+  gap: 10px;
+`;
+
+const HabitTop = styled.View`
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+`;
+
+const HabitInfo = styled.View`
+  flex: 1;
+`;
+
+const HabitTitle = styled.Text`
+  color: ${({ theme }) => theme.colors.text};
+  font-weight: 600;
+  font-size: 16px;
+  flex-direction: row;
+  align-items: center;
+`;
+
+const HabitSub = styled.Text`
+  color: ${({ theme }) => theme.colors.textMuted};
+  font-size: 12px;
+  margin-top: 2px;
+`;
+
+const AIBadge = styled.View`
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: ${({ theme }) => theme.colors.surfaceAlt};
+  margin-bottom: 8px;
+`;
+
+const BadgeEmoji = styled.Text`
+  margin-right: 6px;
+`;
+
+const BadgeText = styled.Text`
+  color: ${({ theme }) => theme.colors.textMuted};
+  font-size: 12px;
+  font-weight: 600;
 `;

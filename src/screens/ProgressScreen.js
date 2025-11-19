@@ -6,6 +6,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { VictoryChart, VictoryAxis, VictoryLine, VictoryTheme } from 'victory-native';
 import { Dimensions } from 'react-native';
+import { useHabitsStore } from '../store/habits';
+import { useTutorialTarget } from '../components/TutorialProvider';
 
 // Pantalla de Progreso
 // - Muestra racha actual con un bloque con gradiente y un icono
@@ -71,11 +73,21 @@ const days = ['L','M','X','J','V','S','D'];
 const width = Math.min(Dimensions.get('window').width - 48, 480);
 
 export default function ProgressScreen() {
-  // Datos de ejemplo (reemplazar con datos reales del store o backend)
-  const streak = 5;
-  const completed = 24;
+  // Obtener racha y datos de la semana desde el store de hábitos
+  const streak = useHabitsStore((s) => s.getStreak());
+  const completed = useHabitsStore((s) => s.getTotalCompletions());
   const success = 86;
-  const week = [0,0,0,0,0,0,0];
+  // weekCounts: array oldest..today (length 7)
+  const weekData = useHabitsStore((s) => s.getCountsForLastNDays(7));
+  const week = weekData.counts || [0,0,0,0,0,0,0];
+  const weekKeys = weekData.keys || [];
+
+  // Generar etiquetas dinámicas de días (L,M,X,J,V,S,D) a partir de las fechas
+  const dayMap = ['D','L','M','X','J','V','S'];
+  const days = weekKeys.length ? weekKeys.map((k) => {
+    const d = new Date(k);
+    return dayMap[d.getDay()];
+  }) : ['L','M','X','J','V','S','D'];
 
   return (
     <Screen contentContainerStyle={{ paddingBottom: 40 }}>
@@ -83,8 +95,9 @@ export default function ProgressScreen() {
         <Title>Tu progreso</Title>
         <Subtitle>Celebra cada logro en tu camino</Subtitle>
 
-        {/* Racha actual */}
-        <Card>
+  {/* Racha actual */}
+  {/* registrar objetivo tutorial 'progress' */}
+  <Card ref={useTutorialTarget('progress')}>
           <LinearGradient colors={["#3a0f2e", "#1b0f1b"]} start={{x:0, y:0}} end={{x:1, y:1}} style={{ borderRadius: 12, overflow: 'hidden' }}>
             <Row style={{ padding: 14, alignItems: 'center' }}>
               <Col>
