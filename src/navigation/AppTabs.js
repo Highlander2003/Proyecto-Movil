@@ -1,6 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import HomeScreen from '../screens/HomeScreen';
+import HomeStack from './HomeStack';
 import HabitsScreen from '../screens/HabitsScreen';
 import RemindersScreen from '../screens/RemindersScreen';
 import ProgressScreen from '../screens/ProgressScreen';
@@ -51,7 +51,7 @@ export default function AppTabs() {
       })}
     >
       {/* Pestañas principales de la app */}
-      <Tab.Screen name="Inicio" component={HomeScreen} />
+      <Tab.Screen name="Inicio" component={HomeStack} />
       <Tab.Screen name="Hábitos" component={HabitsScreen} />
       <Tab.Screen name="Recordatorios" component={RemindersScreen} />
       <Tab.Screen name="Progreso" component={ProgressScreen} />

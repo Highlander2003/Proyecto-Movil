@@ -25,6 +25,9 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+
+
+
 // Catálogo base de sugeridos para arrancar la app sin backend
 const defaultSuggested = [
   { id: 'water', title: 'Beber agua', desc: 'Mantén tu cuerpo hidratado', icon: '💧' },
