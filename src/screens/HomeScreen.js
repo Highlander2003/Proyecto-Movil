@@ -10,6 +10,7 @@ import { useHabitsStore } from '../store/habits';
 import { getDailyChallenge } from '../services/recommendations';
 import { clamp } from '../services/adaptive';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 // Pantalla de Inicio (Home)
 // - Actualmente es un stub (plantilla vacía) para el dashboard principal.
@@ -168,6 +169,7 @@ export default function HomeScreen() {
   }, [active, nowMinutes, parseExactToMinutes]);
 
   const nextItem = upcoming[0] || null;
+  const navigation = useNavigation();
 
   const snooze30 = useCallback((h) => {
     if (!h || h.scheduleType !== 'exact') return;
@@ -179,7 +181,7 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      <Container contentContainerStyle={{ paddingBottom: 40 }}>
+      <Container contentContainerStyle={{ paddingBottom: 120 }}>
       {/* Saludo */}
       <Heading>Hola, {name}</Heading>
 
@@ -203,7 +205,7 @@ export default function HomeScreen() {
                 );
               })()
             ) : (
-              <Button title="Agregar" onPress={() => addSuggested(daily.id)} />
+              <Button title="✨ Generar IA" onPress={() => addSuggested(daily.id)} />
             )}
           </Row>
           <Sub style={{ marginTop: 6 }}>{daily.desc}</Sub>
@@ -312,6 +314,12 @@ export default function HomeScreen() {
         )}
       </Card>
       </Container>
+      {/* FAB: botón flotante en la esquina inferior derecha */}
+      <Fab>
+        <FabTouchable onPress={() => navigation.navigate('Microhabit') } accessibilityLabel="Crear microhabit">
+          <Ionicons name="leaf" size={26} color={'#0d0f12'} />
+        </FabTouchable>
+      </Fab>
     </Screen>
   );
 }
@@ -327,4 +335,27 @@ const TextEmoji = styled.Text`
 
 const ProgressWrap = styled.View`
   width: 120px;
+`;
+
+const Fab = styled.View`
+  position: absolute;
+  right: 16px;
+  bottom: 18px;
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  elevation: 8;
+  shadow-color: #00ffb3ff;
+  shadow-opacity: 0.25;
+  shadow-radius: 6px;
+  shadow-offset: 0px 4px;
+  overflow: visible;
+`;
+
+const FabTouchable = styled.TouchableOpacity`
+  flex: 1;
+  background-color: #00bfa5;
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
 `;

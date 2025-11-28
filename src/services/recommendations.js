@@ -14,6 +14,9 @@ export function getDailyChallenge({ active = [], suggested = [], now = new Date(
   const isNight = hour >= 19 || hour < 5;
 
   // Mapear candidatos por franja
+  <Text style={{ fontSize: 13, color: '#7f8c8d', marginBottom: 6 }}>
+  ✨ Recomendaciones generadas con IA
+</Text>
   const pickIds = [];
   if (isMorning) pickIds.push('water', 'walk15', 'read10');
   if (isAfternoon) pickIds.push('walk15', 'create', 'read10');
